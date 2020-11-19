@@ -1,0 +1,7 @@
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+Pandas = "eadc2687-ae89-51f9-a5d9-86b5a6373a9c"
+WeightedOnlineStats = "bbac0a1f-7c9d-5672-960b-c6ca726e5d5d"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
