@@ -8,9 +8,9 @@ using CUDA
 _a = CuArray{Float32,0}(undef)
 
 function accuracy(_a, ŷ, y::Flux.OneHotMatrix)
-    _a[] = count(size(ŷ, 2)) do i
+    _a[] = count(axes(ŷ, 2)) do i
         @inbounds y[argmax(view(ŷ, :, i)), i]
-    end
+    end / Float32(size(ŷ, 2))
     nothing
 end
 
@@ -29,7 +29,8 @@ function step!(model, ds_train, ds_test, loss_function, opt)
         gs = pb(one(loss))
         Flux.update!(opt, ps, gs)
         fit!(train_loss, loss, size(y, 2))
-        @cuda threads=size(ŷ, 2) accuracy(_a, ŷ, y)
+        @cuda threads=size(ŷ, 2) accuracy(_a, softmax(ŷ), y)
+        #global _ŷ, _y = ŷ, y
         fit!(train_accuracy, _a[], size(y, 2))
     end
 
@@ -40,7 +41,7 @@ function step!(model, ds_train, ds_test, loss_function, opt)
         ŷ = model(x)
         loss = loss_function(ŷ, y; weights)
         fit!(test_loss, loss, size(y, 2))
-        @cuda threads=size(ŷ, 2) accuracy(_a, ŷ, y)
+        @cuda threads=size(ŷ, 2) accuracy(_a, softmax(ŷ), y)
         fit!(test_accuracy, _a[], size(y, 2))
     end
 
@@ -63,7 +64,8 @@ end
 
 include("variables.jl")
 
-inputs = extract_cols(Vars.variables["ge4j_ge3t"])
+raw_inputs = extract_cols(Vars.variables["ge4j_ge3t"])
+inputs = Flux.normalise(raw_inputs)
 outputs = Symbol.(extract_cols(["class_label"]))
 weights = prod(Float32, extract_cols(Vars.weights); dims=1)
 
