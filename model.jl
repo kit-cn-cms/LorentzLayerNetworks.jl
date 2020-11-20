@@ -93,10 +93,9 @@ n_hidden = [200, 200, 200]
 _leakyrelu(x) = max(x * 0.3f0, x)
 
 model = Chain(
-    Dropout(0.1),
-    foldl(n_hidden; init=(Chain(), n_input)) do (c, n_in), n_out
-        Chain(c, Dense(n_in, n_out, _leakyrelu)), n_out
-    end[1],
+    foldl(n_hidden; init=((), n_input)) do (c, n_in), n_out
+        (c..., Dense(n_in, n_out, _leakyrelu), Dropout(0.1)), n_out
+    end[1]...,
     Dense(n_hidden[end], n_output),
 ) |> gpu
 
