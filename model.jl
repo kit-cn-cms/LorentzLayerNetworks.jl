@@ -37,7 +37,7 @@ function step!(model, ds_train, ds_test, loss_function, opt)
 
     testmode!(model)
 
-    test_loss, test_accuracy = WeightedMean(), WeightedMean() 
+    test_loss, test_accuracy = WeightedMean(), WeightedMean()
     for (x, y, weights) in ds_test
         ŷ = model(x)
         loss = loss_function(ŷ, y; weights)
@@ -69,6 +69,18 @@ inputs = extract_cols(Vars.variables["ge4j_ge3t"])
 outputs = Symbol.(extract_cols(["class_label"]))
 weights = prod(Float32, extract_cols(Vars.weights); dims=1)
 
+function scale_weights(weights, outputs)
+    sums_weights = Dict{Symbol,Float32}()
+    for (i, class) in pairs(outputs)
+        sums_weights[class] = get(counts, class, 0f0) + weights[i]
+    end
+    return map(eachindex(weights)) do i
+        weights[i] / sums_weights[outputs[i]]
+    end
+end
+
+total_weights = scale_weights(weights, outputs)
+
 test_split = 0.25
 n_train = floor(Int, length(outputs) * (1 - test_split))
 
@@ -78,14 +90,14 @@ train_idx, test_idx = idx[1:n_train], idx[n_train+1:end]
 ds_train = (
     inputs[:, train_idx],
     Flux.onehotbatch(outputs[train_idx], [:Hbb, :Zbb]),
-    weights[:, train_idx],
+    total_weights[:, train_idx],
 ) .|> gpu
 ds_train = DataLoader(ds_train, batchsize=128, shuffle=true)
 
 ds_test = (
     inputs[:, test_idx],
     Flux.onehotbatch(outputs[test_idx], [:Hbb, :Zbb]),
-    weights[:, test_idx],
+    total_weights[:, test_idx],
 ) .|> gpu
 ds_test = DataLoader(ds_test, batchsize=128, shuffle=false)
 
