@@ -32,7 +32,7 @@ function step!(model, ds_train, ds_test, loss_function, opt)
         Flux.update!(opt, ps, gs)
         fit!(train_loss, loss, size(y, 2))
         @cuda threads=size(ŷ, 2) accuracy(_a, ŷ, y, weights)
-        fit!(train_accuracy, _a[], size(y, 2))
+        fit!(train_accuracy, _a[], sum(weights))
     end
 
     testmode!(model)
@@ -43,7 +43,7 @@ function step!(model, ds_train, ds_test, loss_function, opt)
         loss = loss_function(ŷ, y; weights)
         fit!(test_loss, loss, size(y, 2))
         @cuda threads=size(ŷ, 2) accuracy(_a, ŷ, y, weights)
-        fit!(test_accuracy, _a[], size(y, 2))
+        fit!(test_accuracy, _a[], sum(weights))
     end
 
     @show value.([train_loss, train_accuracy])
@@ -72,9 +72,9 @@ weights = prod(Float32, extract_cols(Vars.weights); dims=1)
 function scale_weights(weights, outputs)
     sums_weights = Dict{Symbol,Float32}()
     for (i, class) in pairs(outputs)
-        sums_weights[class] = get(counts, class, 0f0) + weights[i]
+        sums_weights[class] = get(sums_weights, class, 0f0) + weights[i]
     end
-    return map(eachindex(weights)) do i
+    return map(CartesianIndices(weights)) do i
         weights[i] / sums_weights[outputs[i]]
     end
 end
