@@ -100,7 +100,7 @@ model = Chain(
     Dense(n_hidden[end], n_output),
 ) |> gpu
 
-opt = ADAGrad()
+opt = ADAGrad(0.001)
 
 wmean(x, weights) = sum(x .* weights ./ sum(weights))
 
