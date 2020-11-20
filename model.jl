@@ -7,10 +7,10 @@ using CUDA
 
 _a = CuArray{Float32,0}(undef)
 
-function accuracy(_a, ŷ, y::Flux.OneHotMatrix)
-    _a[] = count(axes(ŷ, 2)) do i
-        y[argmax(view(ŷ, :, i)), i]
-    end / Float32(size(ŷ, 2))
+function accuracy(_a, ŷ, y::Flux.OneHotMatrix; weights)
+    _a[] = sum(axes(ŷ, 2)) do i
+        y[argmax(view(ŷ, :, i)), i] * weights[i]
+    end
     nothing
 end
 
@@ -29,7 +29,7 @@ function step!(model, ds_train, ds_test, loss_function, opt)
         gs = pb(one(loss))
         Flux.update!(opt, ps, gs)
         fit!(train_loss, loss, size(y, 2))
-        @cuda threads=size(ŷ, 2) accuracy(_a, ŷ, y)
+        @cuda threads=size(ŷ, 2) accuracy(_a, ŷ, y; weights)
         fit!(train_accuracy, _a[], size(y, 2))
     end
 
@@ -40,7 +40,7 @@ function step!(model, ds_train, ds_test, loss_function, opt)
         ŷ = model(x)
         loss = loss_function(ŷ, y; weights)
         fit!(test_loss, loss, size(y, 2))
-        @cuda threads=size(ŷ, 2) accuracy(_a, ŷ, y)
+        @cuda threads=size(ŷ, 2) accuracy(_a, ŷ, y; weights)
         fit!(test_accuracy, _a[], size(y, 2))
     end
 
