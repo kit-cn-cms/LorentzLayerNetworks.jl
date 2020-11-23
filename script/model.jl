@@ -43,9 +43,9 @@ optimizer = ADAGrad(0.001)
 loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights))
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
-measures_train, measures_test, measures_validation = DataFrame(), DataFrame(), DataFrame()
 
-for i in 1:20
+recorded_measures = DataFrame()
+for i in 1:100
     @info "Epoch $i"
     train, test, validation = step!(
         model, ds_train, ds_test, ds_validation;
@@ -54,7 +54,17 @@ for i in 1:20
     @show train
     @show test
     @show validation
-    push!(measures_train, train)
-    push!(measures_test, test)
-    push!(measures_validation, test)
+    push!(
+        recorded_measures,
+        merge(prefix_labels.((train, test, validation), (:train_, :test_, :validation_))...),
+    )
+
+    if i >= 20
+        if argmax(recorded_measures[!, :test_loss]) <= i - 5
+            @info "Loss has not increased in the last 5 epochs, stopping training"
+            break
+        elseif test.loss / train.loss > 1.1
+            @info "Test loss more than 10% greater than training loss, stopping training"
+        end
+    end
 end

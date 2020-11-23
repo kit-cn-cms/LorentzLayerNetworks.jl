@@ -5,7 +5,7 @@ using Pandas: read_hdf
 import Random
 
 export accuracy, extract_cols, scale_weights, split_indices, split_datasets, weighted_mean,
-    step!
+    step!, prefix_labels
 
 """
     accuracy(ŷ::AbstractMatrix, y::AbstractMatrix{Bool})
@@ -139,4 +139,7 @@ function step!(model, ds_train, ds_tests...; loss_function, optimizer, measures=
     return map.(value, (measures_train, measures_tests...))
 end
 
+function prefix_labels(nt::NamedTuple{keys}, prefix) where {keys}
+    return NamedTuple{Symbol.(prefix, keys)}(Tuple(nt))
+end
 end
