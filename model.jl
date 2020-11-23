@@ -1,9 +1,10 @@
 using Flux, Zygote
-using Flux: crossentropy, Data.DataLoader
+using Flux: Data.DataLoader
 using HDF5, DataFrames
 using WeightedOnlineStats
 using Random
 using CUDA
+using ProgressMeter
 
 _a = CuArray{Float32,0}(undef)
 
@@ -20,6 +21,7 @@ function step!(model, ds_train, ds_test, loss_function, opt)
     trainmode!(model)
 
     train_loss, train_accuracy = WeightedMean(), WeightedMean()
+    p = Progress(div(ds_train.nobs, ds_train.batchsize, RoundUp))
     for (x, y, weights) in ds_train
         local ŷ
         loss, pb = Zygote.pullback(ps) do
@@ -30,8 +32,8 @@ function step!(model, ds_train, ds_test, loss_function, opt)
         Flux.update!(opt, ps, gs)
         fit!(train_loss, loss, size(y, 2))
         @cuda threads=size(ŷ, 2) accuracy(_a, softmax(ŷ), y)
-        #global _ŷ, _y = ŷ, y
         fit!(train_accuracy, _a[], size(y, 2))
+        next!(p)
     end
 
     testmode!(model)
