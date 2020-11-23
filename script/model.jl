@@ -63,8 +63,8 @@ for i in 1:100
     )
 
     if i >= 20
-        if argmax(recorded_measures[!, :test_loss]) <= i - 5
-            @info "Loss has not increased in the last 5 epochs, stopping training"
+        if argmin(recorded_measures[!, :test_loss]) <= i - 5
+            @info "Loss has not decreased in the last 5 epochs, stopping training"
             break
         elseif test.loss / train.loss > 1.1
             @info "Test loss more than 10% greater than training loss, stopping training"
