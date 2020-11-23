@@ -2,6 +2,7 @@ using JuliaForHEP
 using Flux
 using Flux: Data.DataLoader
 using DataFrames
+using Arrow
 
 include("variables.jl")
 
@@ -31,6 +32,8 @@ n_hidden = [200, 200, 200]
 
 _leakyrelu(x) = max(x * 0.3f0, x)
 
+for optimizer in [ADAGrad(0.001), ADAM(1e-4)]
+
 model = Chain(
     foldl(n_hidden; init=((), n_input)) do (c, n_in), n_out
         (c..., Dense(n_in, n_out, _leakyrelu), Dropout(0.1)), n_out
@@ -38,7 +41,7 @@ model = Chain(
     Dense(n_hidden[end], n_output),
 ) |> gpu
 
-optimizer = ADAGrad(0.001)
+#optimizer = ADAGrad(0.001)
 
 loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights))
 
@@ -67,4 +70,7 @@ for i in 1:100
             @info "Test loss more than 10% greater than training loss, stopping training"
         end
     end
+end
+
+Arrow.write("/work/sschaub/JuliaForHEP/training_$(typeof(optimizer)).arrow", recorded_measures)
 end
