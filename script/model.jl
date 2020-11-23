@@ -1,7 +1,6 @@
 using JuliaForHEP
 using Flux
 using Flux: Data.DataLoader
-using Random
 using DataFrames
 
 include("variables.jl")
@@ -13,29 +12,19 @@ raw_inputs = extract_cols(h5files, Vars.variables["ge4j_ge3t"])
 inputs = Flux.normalise(raw_inputs; dims=2)
 
 outputs = Symbol.(extract_cols(h5files, ["class_label"]))
+outputs_onehot = Flux.onehotbatch(vec(outputs), [:Hbb, :Zbb])
 
 weights = prod(Float32, extract_cols(h5files, Vars.weights); dims=1)
 total_weights = scale_weights(weights, outputs)
 
-test_split = 0.25
-n_train = floor(Int, length(outputs) * (1 - test_split))
-
-idx = shuffle(eachindex(outputs))
-train_idx, test_idx = idx[1:n_train], idx[n_train+1:end]
-
-ds_train = (
-    inputs[:, train_idx],
-    Flux.onehotbatch(outputs[train_idx], [:Hbb, :Zbb]),
-    total_weights[:, train_idx],
-) .|> gpu
-ds_train = DataLoader(ds_train, batchsize=128, shuffle=true)
-
-ds_test = (
-    inputs[:, test_idx],
-    Flux.onehotbatch(outputs[test_idx], [:Hbb, :Zbb]),
-    total_weights[:, test_idx],
-) .|> gpu
-ds_test = DataLoader(ds_test, batchsize=128, shuffle=false)
+ds_train, ds_validation, ds_test = split_datasets(
+    gpu,
+    (inputs, outputs_onehot, total_weights),
+    [.75 * .8, .75 * .2, .25],
+)
+ds_train = DataLoader(ds_train; batchsize=128, shuffle=true)
+ds_validation = DataLoader(ds_validation; batchsize=128, shuffle=false)
+ds_test = DataLoader(ds_test; batchsize=128, shuffle=false)
 
 n_input, n_output = size(inputs, 1), 2
 n_hidden = [200, 200, 200]
@@ -49,19 +38,23 @@ model = Chain(
     Dense(n_hidden[end], n_output),
 ) |> gpu
 
-opt = ADAGrad(0.001)
+optimizer = ADAGrad(0.001)
 
 loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights))
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
-
-measures_train, measures_test = DataFrame(), DataFrame()
+measures_train, measures_test, measures_validation = DataFrame(), DataFrame(), DataFrame()
 
 for i in 1:20
     @info "Epoch $i"
-    train, test = step!(model, ds_train, ds_test, loss, opt, measures)
+    train, test, validation = step!(
+        model, ds_train, ds_test, ds_validation;
+        loss_function=loss, optimizer, measures,
+    )
     @show train
     @show test
+    @show validation
     push!(measures_train, train)
     push!(measures_test, test)
+    push!(measures_validation, test)
 end

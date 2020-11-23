@@ -2,8 +2,10 @@ module JuliaForHEP
 
 using Flux, Zygote, CUDA, WeightedOnlineStats, ProgressMeter
 using Pandas: read_hdf
+import Random
 
-export accuracy, extract_cols, scale_weights, weighted_mean, step!
+export accuracy, extract_cols, scale_weights, split_indices, split_datasets, weighted_mean,
+    step!
 
 """
     accuracy(ŷ::AbstractMatrix, y::AbstractMatrix{Bool})
@@ -56,6 +58,37 @@ function scale_weights(weights, outputs)
     end
 end
 
+function split_indices(indices, proportions; shuffle=true)
+    if shuffle
+        indices = Random.shuffle(indices)
+    end
+    split = [0; round.(Int, cumsum(proportions) .* length(indices))]
+
+    if split[end] > length(indices)
+        throw(ArgumentError("Invalid proportions $proportions, sum is > 1"))
+    elseif split[end] < length(indices)
+        @warn "$(length(indices) - slit[end]) indices not assigned to any dataset"
+    end
+
+    return ntuple(length(split) - 1) do i
+        indices[split[i]+1:split[i+1]]
+    end
+end
+
+function split_datasets(datasets, proportions; kwargs...)
+    return split_datasets(identity, datasets, proportions; kwargs...)
+end
+function split_datasets(f, datasets, proportions; kwargs...)
+    if !all(ds -> axes(ds)[end] == axes(datasets[1])[end], datasets[2:end])
+        throw(ArgumentError("Last axes of datasets don't match"))
+    end
+    return map(split_indices(axes(datasets[1])[end], proportions; kwargs...)) do idx
+        map(datasets) do ds
+            f(ds[ntuple(_ -> (:), ndims(ds)-1)..., idx])
+        end
+    end
+end
+
 """
     weighted_mean(x, weights)
 
@@ -64,7 +97,7 @@ AD-friendly weighted mean. `weights` is always normalized.
 weighted_mean(x, weights) = sum(x .* weights ./ sum(weights))
 
 
-function step!(model, ds_train, ds_test, loss_function, opt, measures)
+function step!(model, ds_train, ds_tests...; loss_function, optimizer, measures=(;))
     ps = Flux.params(model)
 
     trainmode!(model)
@@ -78,7 +111,7 @@ function step!(model, ds_train, ds_test, loss_function, opt, measures)
             return loss_function(ŷ, y; weights)
         end
         gs = pb(one(loss))
-        Flux.update!(opt, ps, gs)
+        Flux.update!(optimizer, ps, gs)
 
         state = (; x, y, weights, loss, ŷ, mode=:train)
         for (k, f) in pairs(measures)
@@ -89,18 +122,21 @@ function step!(model, ds_train, ds_test, loss_function, opt, measures)
 
     testmode!(model)
 
-    measures_test = map(_ -> WeightedMean(), measures)
-    for (x, y, weights) in ds_test
-        ŷ = model(x)
-        loss = loss_function(ŷ, y; weights)
+    measures_tests = map(enumerate(ds_tests)) do (i, ds_test)
+        measures_test = map(_ -> WeightedMean(), measures)
+        for (x, y, weights) in ds_test
+            ŷ = model(x)
+            loss = loss_function(ŷ, y; weights)
 
-        state = (; x, y, weights, loss, ŷ, mode=:test)
-        for (k, f) in pairs(measures)
-            fit!(measures_test[k], f(state), size(y, 2))
+            state = (; x, y, weights, loss, ŷ, mode=Symbol(:test_, i))
+            for (k, f) in pairs(measures)
+                fit!(measures_test[k], f(state), size(y, 2))
+            end
         end
+        return measures_test
     end
 
-    return map.(value, (measures_train, measures_test))
+    return map.(value, (measures_train, measures_tests...))
 end
 
 end
