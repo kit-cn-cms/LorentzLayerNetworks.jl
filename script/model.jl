@@ -39,10 +39,13 @@ model = Chain(
 ) |> gpu
 
 optimizer = ADAGrad(0.001)
+optimizer = ADAM(5e-5)
 
 loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights))
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
+
+using StatsPlots
 
 recorded_measures = DataFrame()
 for i in 1:100
@@ -59,12 +62,19 @@ for i in 1:100
         merge(prefix_labels.((train, test, validation), (:train_, :test_, :validation_))...),
     )
 
-    if i >= 20
-        if argmin(recorded_measures[!, :test_loss]) <= i - 5
-            @info "Loss has not decreased in the last 5 epochs, stopping training"
+    plt = @df recorded_measures plot(
+        [:train_loss, :test_loss, :validation_loss],
+        labels=["train loss" "test loss" "validation loss"],
+    )
+    display(plt)
+
+    if i >= 5
+        if argmin(recorded_measures[!, :test_loss]) <= i - 3
+            @info "Loss has not decreased in the last 3 epochs, stopping training"
             break
         elseif test.loss / train.loss > 1.1
             @info "Test loss more than 10% greater than training loss, stopping training"
+            break
         end
     end
 end
