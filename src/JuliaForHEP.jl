@@ -58,9 +58,9 @@ function scale_weights(weights, outputs)
     end
 end
 
-function split_indices(indices, proportions; shuffle=true)
+function split_indices(indices, proportions; shuffle=true, rng=Random.GLOBAL_RNG)
     if shuffle
-        indices = Random.shuffle(indices)
+        indices = Random.shuffle(rng, indices)
     end
     split = [0; round.(Int, cumsum(proportions) .* length(indices))]
 
