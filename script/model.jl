@@ -89,11 +89,11 @@ output_dir = "/work/sschaub/JuliaForHEP/run1"
 
 Arrow.write(
     joinpath(output_dir, "layer_params.arrow"),
-    DataFrame(Symbol(i % Bool ? :W_ : :b_, fld(i, 2)) => p for (i, p) in enumerate(Flux.params(model)))
+    DataFrame((Symbol(i % Bool ? :W_ : :b_, fld1(i, 2)) => [p] for (i, p) in enumerate(Flux.params(model)))...)
 )
 
-all_features = DataFrame()
-ŷ = model(gpu(inputs)) |> cpu
+all_features = DataFrame();
+ŷ = softmax(model(gpu(inputs))) |> cpu
 for (label, idx) in [
     :train => idx_train,
     :test => idx_test,
@@ -102,13 +102,15 @@ for (label, idx) in [
     idx = cpu(idx)
     input_features = Symbol.(Vars.variables["ge4j_ge3t"]) .=> eachrow(view(raw_inputs, :, idx))
     input_features_norm = Symbol.(Vars.variables["ge4j_ge3t"], :_norm) .=> eachrow(view(inputs, :, idx))
-    output_features = [:output_expected => outputs[idx], :output_predicted => ŷ[idx]]
+    output_expected = :output_expected => outputs[idx]
+    output_predicted = [Symbol(:output_predicted_, l) => ŷ[i, idx] for (i, l) in enumerate([:Hbb, :Zbb])]
     _weights = [:weights => weights[idx], :weights_norm => total_weights[idx]]
     kind = :kind => fill(label, length(idx))
-    append!(all_features, DataFrame(input_features..., output_features..., _weights..., kind))
+    append!(all_features, DataFrame(input_features..., output_expected, output_predicted..., _weights..., kind))
 end
 
 Arrow.write(
     joinpath(output_dir, "all_features.arrow"),
-    DataFrame(Symbol(i % Bool ? :W_ : :b_, fld(i, 2)) => p for (i, p) in enumerate(Flux.params(model)))
+    all_features,
 )
+
