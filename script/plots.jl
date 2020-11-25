@@ -9,19 +9,16 @@ output_dir = "/work/sschaub/JuliaForHEP/run1"
 layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
 all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
 
+fig1, ax1 = subplots()
+linestyles = (train = "-", test = "--", validation="-.")
 for ((kind,), df) in pairs(groupby(all_features, :kind))
-    fig, ax = subplots()
-    foreach(pairs(groupby(df, :output_expected, sort=true))) do ((class,), df)
-        ax.hist(
-            df.output_predicted_Hbb,
-            label="true $class", density=true,
-            bins=30, histtype=:step,
+    foreach(pairs(groupby(df, :output_expected, sort=true)), [:C0, :C1]) do ((class,), df), color
+        ax1.hist(
+            df.output_predicted_Hbb;
+            label="true $class ($kind)", density=true,
+            bins=30, histtype=:step, color, ls=linestyles[kind],
         )
     end
-    ax.set_xlabel("p(Hbb)")
-    ax.legend()
-    fig.suptitle(kind)
-    fig.savefig(joinpath(output_dir, "output_features_hist_$kind.pdf"))
 
     confusion_mat = zeros(2, 2)
     for r in eachrow(df)
@@ -66,3 +63,8 @@ for ((kind,), df) in pairs(groupby(all_features, :kind))
     fig.suptitle(kind)
     fig.savefig(joinpath(output_dir, "input_features_norm_hist_$kind.pdf"))
 end
+
+ax1.set_xlabel("p(Hbb)")
+ax1.legend()
+fig1.suptitle("Predicted Hbb")
+fig1.savefig(joinpath(output_dir, "output_features_hist.pdf"))
