@@ -2,6 +2,8 @@ using JuliaForHEP
 using Flux
 using Flux: Data.DataLoader
 using DataFrames
+using Random
+Random.seed!(123)
 
 include("variables.jl")
 
@@ -17,11 +19,13 @@ outputs_onehot = Flux.onehotbatch(vec(outputs), [:Hbb, :Zbb])
 weights = prod(Float32, extract_cols(h5files, Vars.weights); dims=1)
 total_weights = scale_weights(weights, outputs)
 
+
 ds_train, ds_validation, ds_test = split_datasets(
     gpu,
-    (inputs, outputs_onehot, total_weights),
+    (inputs, outputs_onehot, total_weights, axes(inputs, 2)),
     [.75 * .8, .75 * .2, .25],
 )
+idx_train, idx_validation, idx_test = last.((ds_train, ds_validation, ds_test))
 ds_train = DataLoader(ds_train; batchsize=128, shuffle=true)
 ds_validation = DataLoader(ds_validation; batchsize=128, shuffle=false)
 ds_test = DataLoader(ds_test; batchsize=128, shuffle=false)
@@ -78,3 +82,33 @@ for i in 1:100
         end
     end
 end
+
+using Arrow
+
+output_dir = "/work/sschaub/JuliaForHEP/run1"
+
+Arrow.write(
+    joinpath(output_dir, "layer_params.arrow"),
+    DataFrame(Symbol(i % Bool ? :W_ : :b_, fld(i, 2)) => p for (i, p) in enumerate(Flux.params(model)))
+)
+
+all_features = DataFrame()
+ŷ = model(gpu(inputs)) |> cpu
+for (label, idx) in [
+    :train => idx_train,
+    :test => idx_test,
+    :validation => idx_validation,
+]
+    idx = cpu(idx)
+    input_features = Symbol.(Vars.variables["ge4j_ge3t"]) .=> eachrow(view(raw_inputs, :, idx))
+    input_features_norm = Symbol.(Vars.variables["ge4j_ge3t"], :_norm) .=> eachrow(view(inputs, :, idx))
+    output_features = [:output_expected => outputs[idx], :output_predicted => ŷ[idx]]
+    _weights = [:weights => weights[idx], :weights_norm => total_weights[idx]]
+    kind = :kind => fill(label, length(idx))
+    append!(all_features, DataFrame(input_features..., output_features..., _weights..., kind))
+end
+
+Arrow.write(
+    joinpath(output_dir, "all_features.arrow"),
+    DataFrame(Symbol(i % Bool ? :W_ : :b_, fld(i, 2)) => p for (i, p) in enumerate(Flux.params(model)))
+)
