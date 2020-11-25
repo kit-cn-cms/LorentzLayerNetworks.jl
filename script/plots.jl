@@ -11,14 +11,17 @@ all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow"))
 
 for ((kind,), df) in pairs(groupby(all_features, :kind))
     fig, axes = subplots(ncols=2, nrows=1, figsize=(10, 5))
-    foreach(pairs(groupby(df, :output_expected, sort=true)), axes) do ((class,), df), ax
+    _df = select(df, :, :output_predicted_Hbb => (x -> ifelse.(x .> .5, :Hbb, :Zbb)) => :output_predicted)
+    foreach(pairs(groupby(_df, :output_predicted, sort=true)), axes) do ((class,), df), ax
+        idx_Hbb = df.output_expected .=== :Hbb#class
         ax.hist(
-            [df.output_predicted_Hbb, df.output_predicted_Zbb],
-            weights = [df.weights_norm, df.weights_norm],
-            label=["p(Hbb)", "p(Zbb)"], stacked=true,
+            [df[idx_Hbb, Symbol(:output_predicted_, class)], df[.!idx_Hbb, Symbol(:output_predicted_, class)]],
+            weights = [df[idx_Hbb, :weights], df[.!idx_Hbb, :weights]] ./ sum(_df.weights),
+            label=["true Hbb", "true Zbb"], stacked=true, #density=true,
             bins=20, rwidth=.8
         )
-        ax.set_title("$class events")
+        ax.set_title("classified as $class")
+        ax.set_xlabel("p($class)")
         ax.legend()
     end
     fig.suptitle(kind)
@@ -35,11 +38,11 @@ for ((kind,), df) in pairs(groupby(all_features, :kind))
     for i in 1:2, j in 1:2
         ax.text(j-1, i-1, @sprintf("%.3g", confusion_mat[i, j]), ha=:center, va=:center)
     end
+    ax.set_xlabel("predicted output")
+    ax.set_xticks(0:1, [:Hbb,:Zbb])
+    ax.set_ylabel("true output")
+    ax.set_yticks(0:1, [:Hbb,:Zbb])
     fig.colorbar(img)
-    xlabel("predicted output")
-    xticks(0:1, [:Hbb,:Zbb])
-    ylabel("true output")
-    yticks(0:1, [:Hbb,:Zbb])
     fig.suptitle(kind)
     fig.savefig(joinpath(output_dir, "confusion_matrix_$kind.pdf"))
 
