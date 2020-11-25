@@ -87,6 +87,8 @@ using Arrow
 
 output_dir = "/work/sschaub/JuliaForHEP/run1"
 
+savefig(joinpath(output_dir, "losses.pdf"))
+
 Arrow.write(
     joinpath(output_dir, "layer_params.arrow"),
     DataFrame((Symbol(i % Bool ? :W_ : :b_, fld1(i, 2)) => [p] for (i, p) in enumerate(Flux.params(model)))...)
@@ -106,7 +108,7 @@ for (label, idx) in [
     output_predicted = [Symbol(:output_predicted_, l) => ŷ[i, idx] for (i, l) in enumerate([:Hbb, :Zbb])]
     _weights = [:weights => weights[idx], :weights_norm => total_weights[idx]]
     kind = :kind => fill(label, length(idx))
-    append!(all_features, DataFrame(input_features..., output_expected, output_predicted..., _weights..., kind))
+    append!(all_features, DataFrame(input_features..., input_features_norm..., output_expected, output_predicted..., _weights..., kind))
 end
 
 Arrow.write(
