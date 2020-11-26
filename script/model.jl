@@ -3,6 +3,7 @@ using Flux
 using Flux: Data.DataLoader
 using DataFrames
 using Random
+using LinearAlgebra
 Random.seed!(123)
 
 include("variables.jl")
@@ -45,7 +46,10 @@ model = Chain(
 optimizer = ADAGrad(0.001)
 optimizer = ADAM(5e-5)
 
-loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights))
+let ps = Flux.params(model)
+    global penalty() = sum(x -> norm(x .+ 1e-8), ps)
+end
+loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1e-5 * penalty()
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 
@@ -66,7 +70,7 @@ for i in 1:100
         merge(prefix_labels.((train, test, validation), (:train_, :test_, :validation_))...),
     )
 
-    plt = @df recorded_measures plot(
+    plt = @df recorded_measures Plots.plot(
         [:train_loss, :test_loss, :validation_loss],
         labels=["train loss" "test loss" "validation loss"],
     )
@@ -85,9 +89,14 @@ end
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/run1"
+output_dir = "/work/sschaub/JuliaForHEP/run3"
 
-savefig(joinpath(output_dir, "losses.pdf"))
+Plots.savefig(joinpath(output_dir, "losses.pdf"))
+
+Arrow.write(
+    joinpath(output_dir, "recorded_measures.arrow"),
+    recorded_measures,
+)
 
 Arrow.write(
     joinpath(output_dir, "layer_params.arrow"),
