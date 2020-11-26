@@ -4,9 +4,9 @@ using PyPlot
 using Printf
 
 include("variables.jl")
-output_dir = "/work/sschaub/JuliaForHEP/run1"
+output_dir = "/work/sschaub/JuliaForHEP/run3"
 
-layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
+#layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
 all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
 
 fig1, ax1 = subplots()
@@ -41,27 +41,19 @@ for ((kind,), df) in pairs(groupby(all_features, :kind))
     fig.savefig(joinpath(output_dir, "confusion_matrix_$kind.pdf"))
 
     fig, axes = subplots(ncols=6, nrows=8, figsize=(25, 25))
+    idx = df.output_predicted_Hbb .> .5
     foreach(Vars.variables["ge4j_ge3t"], axes) do i, ax
         ax.hist(
-            df[:, i],
+            [df[idx, i], df[.!idx, i]],
+            label=["predicted Hbb", "predicted Zbb"],
             bins=20, rwidth=.8, density=true,
         )
         ax.set_title("feature $i")
+        ax.legend()
     end
     fig.suptitle(kind)
+    fig.tight_layout()
     fig.savefig(joinpath(output_dir, "input_features_hist_$kind.pdf"))
-
-
-    fig, axes = subplots(ncols=6, nrows=8, figsize=(25, 25))
-    foreach(Vars.variables["ge4j_ge3t"], axes) do i, ax
-        ax.hist(
-            df[:, i * "_norm"],
-            bins=20, rwidth=.8, density=true,
-        )
-        ax.set_title("feature $i")
-    end
-    fig.suptitle(kind)
-    fig.savefig(joinpath(output_dir, "input_features_norm_hist_$kind.pdf"))
 end
 
 ax1.set_xlabel("p(Hbb)")
