@@ -54,6 +54,11 @@ for ((kind,), df) in pairs(groupby(all_features, :kind))
     fig.suptitle(kind)
     fig.tight_layout()
     fig.savefig(joinpath(output_dir, "input_features_hist_$kind.pdf"))
+
+    predictions_positives = df[df.output_expected .=== :Hbb, :output_predicted_Hbb]
+    fig, ax = subplots()
+    ax.hist(predictions_positives, cumulative=true, bins=30, density=true, histtype=:step, orientation=:horizontal)
+    fig.savefig(joinpath(output_dir, "roc_curve_$kind.pdf"))
 end
 
 ax1.set_xlabel("p(Hbb)")
