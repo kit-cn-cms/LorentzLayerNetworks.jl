@@ -143,8 +143,9 @@ function prefix_labels(nt::NamedTuple{keys}, prefix) where {keys}
     return NamedTuple{Symbol.(prefix, keys)}(Tuple(nt))
 end
 
-export CoLa
+export CoLa, LoLa
 
 include("cola.jl")
+include("lola.jl")
 
 end
