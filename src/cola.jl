@@ -45,12 +45,13 @@ using ChainRulesCore
 function ChainRulesCore.rrule(
     ::typeof(*),
     c::CoLa{<:Union{Real,Complex}},
-    k::AbstractMatrix{<:Union{Real,Complex}},
+    k::AbstractVecOrMat,
 )
     function mul_pullback(Δ)
+        t(k) = k isa AbstractVector ? reshape(k, 1, :) : PermutedDimsArray(k, (2, 1))
         dc = @thunk let
             N = size(k, 1)
-            dC = @view(Δ[N+1:end, :]) * k'
+            dC = adjoint.(@view(Δ[N+1:end, :])) * t(k)
             Composite{typeof(dC)}(; C = dC)
         end
         return NO_FIELDS, dc, @thunk(c' * Δ)
@@ -64,3 +65,11 @@ function Flux.update!(opt, c::CoLa, dc)
     end
     return c
 end
+
+struct Linear{A<:AbstractMatrix}
+    m::A
+end
+
+Flux.@functor Linear
+
+(l::Linear)(x) = l.m * x
