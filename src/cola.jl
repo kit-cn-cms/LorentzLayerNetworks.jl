@@ -1,4 +1,5 @@
 using LinearAlgebra, ChainRulesCore
+using Compat
 
 struct CoLa{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
     C::A
@@ -26,7 +27,11 @@ end
 function _mul!(k_, c, k, α, β, _add)
     N = size(k, 1)
     @inbounds k_[1:N, :] .= _add.(k, view(k_, 1:N, :))
-    mul!(@view(k_[N+1:end, :]), c.C, k, α, β)
+    r_k_ = reinterpret(reshape, eltype(eltype(k_)), k_)
+    r_k = reinterpret(reshape, eltype(eltype(k)), k)
+    for μ in 1:4
+        mul!(@view(r_k_[μ, N+1:end, :]), c.C, view(r_k, μ, :, :), α, β)
+    end
     return k_
 end
 
