@@ -24,14 +24,19 @@ function _boundschecks(k_, c, k)
     @assert size(k, 2) == size(k_, 2)
 end
 
-function _mul!(k_, c, k, α, β, _add)
+function _kmul!(k_, c, k, α, β; N=0)
     N = size(k, 1)
-    @inbounds k_[1:N, :] .= _add.(k, view(k_, 1:N, :))
     r_k_ = reinterpret(reshape, eltype(eltype(k_)), k_)
     r_k = reinterpret(reshape, eltype(eltype(k)), k)
     for μ in 1:4
         mul!(@view(r_k_[μ, N+1:end, :]), c.C, view(r_k, μ, :, :), α, β)
     end
+    return k_
+end
+function _mul!(k_, c, k, α, β, _add)
+    N = size(k, 1)
+    @inbounds k_[1:N, :] .= _add.(k, view(k_, 1:N, :))
+    _kmul!(k_, c, k, α, β; N)
     return k_
 end
 
@@ -47,6 +52,12 @@ end
 
 using ChainRulesCore
 
+function _kmul(c, k)
+    k_ = similar(k, size(c, 1), size(k, 2))
+    _kmul!(k_, c, k, true, false)
+    return k_
+end
+
 function ChainRulesCore.rrule(
     ::typeof(*),
     c::CoLa{<:Union{Real,Complex}},
@@ -56,7 +67,8 @@ function ChainRulesCore.rrule(
         t(k) = k isa AbstractVector ? reshape(k, 1, :) : PermutedDimsArray(k, (2, 1))
         dc = @thunk let
             N = size(k, 1)
-            dC = adjoint.(@view(Δ[N+1:end, :])) * t(k)
+            #dC = adjoint.(@view(Δ[N+1:end, :])) * t(k)
+            dC = _kmul(adjoint.(@view(Δ[N+1:end, :])), t(k))
             Composite{typeof(dC)}(; C = dC)
         end
         return NO_FIELDS, dc, @thunk(c' * Δ)
