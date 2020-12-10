@@ -25,18 +25,19 @@ function _boundschecks(k_, c, k)
 end
 
 function _kmul!(k_, c, k, α, β; N=0)
-    N = size(k, 1)
     r_k_ = reinterpret(reshape, eltype(eltype(k_)), k_)
     r_k = reinterpret(reshape, eltype(eltype(k)), k)
+    @show summary.((k_, c, k))
+    @show summary.((r_k_, c, r_k))
     for μ in 1:4
-        mul!(@view(r_k_[μ, N+1:end, :]), c.C, view(r_k, μ, :, :), α, β)
+        mul!(@view(r_k_[μ, N+1:end, :]), c, view(r_k, μ, :, :), α, β)
     end
     return k_
 end
 function _mul!(k_, c, k, α, β, _add)
     N = size(k, 1)
     @inbounds k_[1:N, :] .= _add.(k, view(k_, 1:N, :))
-    _kmul!(k_, c, k, α, β; N)
+    _kmul!(k_, c.C, k, α, β; N)
     return k_
 end
 
@@ -54,6 +55,7 @@ using ChainRulesCore
 
 function _kmul(c, k)
     k_ = similar(k, size(c, 1), size(k, 2))
+    @show summary.((k_, c, k))
     _kmul!(k_, c, k, true, false)
     return k_
 end
