@@ -6,6 +6,7 @@ struct CoLa{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
 end
 
 Base.size(c::CoLa) = (size(c.C, 1) + size(c.C, 2), size(c.C, 2))
+CUDA.cu(c::CoLa) = CoLa(CUDA.cu(c.C))
 
 @inline function Base.getindex(c::CoLa{T}, i::Int, j::Int) where T
     Base.@boundscheck Base.checkbounds(c, i, j)
