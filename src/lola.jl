@@ -77,13 +77,14 @@ include("lola_kernel.jl")
 E!(_E::AbstractVector, w, k::AbstractVector) = @tullio _E[i] = w[i, j] * E(k[j])
 E!(_E::AbstractMatrix, w, k::AbstractMatrix) = @tullio _E[i, l] = w[i, j] * E(k[j, l])
 
+slice(res, i) = view(res, i, Base.tail(axes(res))...)
+
 function _lola3(l, k)
     T = eltype(eltype(k))
     res = similar(k, T, 3 + length(l.w_ds), axes(k)...)
-    slice(i) = view(res, i, axes(k)...)
-    map!(m², slice(1), k)
-    map!(p_T, slice(2), k)
-    E!(slice(3), l.w_E, k)
+    map!(m², slice(res, 1), k)
+    map!(p_T, slice(res, 2), k)
+    E!(slice(res, 3), l.w_E, k)
     _k = reinterpret(reshape, T, k)
     return res, _k
 end
@@ -91,7 +92,7 @@ end
 function (l::LoLa)(k)
     res, _k = _lola3(l, k)
     for i in 1:length(l.w_ds)
-        wd!(slice(3 + i), l.w_ds[i], _k, l.w_d_reducers[i])
+        wd!(slice(res, 3 + i), l.w_ds[i], _k, l.w_d_reducers[i])
     end
     return res
 end
@@ -102,32 +103,33 @@ using StaticArrays: SOneTo
 function ChainRulesCore.rrule(l::LoLa, k)
     Ω, _k = _lola3(l, k)
     pullbacks_wd = ntuple(length(l.w_ds)) do i
-        _, pb_w, pb_k = wd_adjoint!(slice(3 + i), l.w_ds[i], _k, l.w_d_reducers[i])
+        _, pb_w, pb_k = wd_adjoint!(slice(Ω, 3 + i), l.w_ds[i], _k, l.w_d_reducers[i])
         return pb_w, pb_k
     end
 
     function lola_pullback(Δ)
         T = eltype(Δ)
         dk = @thunk begin
-            dE = l.w_E' * Δ
+            dE = l.w_E' * slice(Δ, 3)
             dk = similar(k)
-            map!(dk, CartesianIndices(k), k) do (i, k_i)
-                @. 2Δ[1, i] * k_i + Δ[2, i] / 2Ω[2, i] * k_i + SA{T}[0, 0, 0, Δ[3, i], dE[i]])
+            map!(dk, CartesianIndices(k), k) do i, k_i
+                @. 2Δ[1, i] * k_i + Δ[2, i] / 2Ω[2, i] * k_i + SA{T}[0, 0, 0, dE[i]]
             end
+            _dk = reinterpret(reshape, T, dk)
             for i in 1:length(l.w_ds)
-                pullbacks_wd[1][2](dk, Δ)
+                pullbacks_wd[1][2](_dk, slice(Δ, 3 + i))
             end
             return dk
         end
         dw_E = @thunk if ndims(k) == 1
-            @tullio dw_E[1, i] := w[j, i] * E(k[j])
+            @tullio dw_E[1, i] := $(l.w_E)[j, i] * E(k[j])
         else
-            @tullio dw_E[i, l] := w[i, j] * E(k[l, j])
+            @tullio dw_E[i, l] := $(l.w_E)[i, j] * E(k[l, j])
         end
         dw_ds = ntuple(length(l.w_ds)) do i
             @thunk begin
-                dw_d = reinterpret(reshape, T, zero(k))
-                pullbacks_wd[i][1](dw_d, Δ)
+                dw_d = reinterpret(reshape, T, zero(l.w_ds[i]))
+                pullbacks_wd[i][1](dw_d, slice(Δ, 3 + i))
                 return dw_d
             end
         end
