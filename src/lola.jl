@@ -77,7 +77,7 @@ include("lola_kernel.jl")
 E!(_E::AbstractVector, w, k::AbstractVector) = @tullio _E[i] = w[i, j] * E(k[j])
 E!(_E::AbstractMatrix, w, k::AbstractMatrix) = @tullio _E[i, l] = w[i, j] * E(k[j, l])
 
-function (l::LoLa)(k)
+function _lola3(l, k)
     T = eltype(eltype(k))
     res = similar(k, T, 3 + length(l.w_ds), axes(k)...)
     slice(i) = view(res, i, axes(k)...)
@@ -85,6 +85,11 @@ function (l::LoLa)(k)
     map!(p_T, slice(2), k)
     E!(slice(3), l.w_E, k)
     _k = reinterpret(reshape, T, k)
+    return res, _k
+end
+
+function (l::LoLa)(k)
+    res, _k = _lola3(l, k)
     for i in 1:length(l.w_ds)
         wd!(slice(3 + i), l.w_ds[i], _k, l.w_d_reducers[i])
     end
@@ -95,27 +100,40 @@ using StaticArrays
 using StaticArrays: SOneTo
 
 function ChainRulesCore.rrule(l::LoLa, k)
-    Ω = l(k)
+    Ω, _k = _lola3(l, k)
+    pullbacks_wd = ntuple(length(l.w_ds)) do i
+        _, pb_w, pb_k = wd_adjoint!(slice(3 + i), l.w_ds[i], _k, l.w_d_reducers[i])
+        return pb_w, pb_k
+    end
 
     function lola_pullback(Δ)
         T = eltype(Δ)
-        dE = l.w_E' * Δ
-        dmink = similar(k, axes(k, 1), axes(k, 1))
-        broadcast(k, reshape(k, 1, :), axes(k, 1), axes(k, 2)) do k_j, k_m, j, m
-            (k_j .- k[m])
+        dk = @thunk begin
+            dE = l.w_E' * Δ
+            dk = similar(k)
+            map!(dk, CartesianIndices(k), k) do (i, k_i)
+                @. 2Δ[1, i] * k_i + Δ[2, i] / 2Ω[2, i] * k_i + SA{T}[0, 0, 0, Δ[3, i], dE[i]])
+            end
+            for i in 1:length(l.w_ds)
+                pullbacks_wd[1][2](dk, Δ)
+            end
+            return dk
         end
-            sum(eachindex(k)) do m
-                SA{T}[k_j .- k[m] ]
+        dw_E = @thunk if ndims(k) == 1
+            @tullio dw_E[1, i] := w[j, i] * E(k[j])
+        else
+            @tullio dw_E[i, l] := w[i, j] * E(k[l, j])
         end
-        dw_d = map(Δ) do Δ_i
-
+        dw_ds = ntuple(length(l.w_ds)) do i
+            @thunk begin
+                dw_d = reinterpret(reshape, T, zero(k))
+                pullbacks_wd[i][1](dw_d, Δ)
+                return dw_d
+            end
         end
-        map(pairs(k)) do (i, k_i)
-            @. Δ * (2 * k_i + k_i / 2Ω[2, i] + SA{T}[0, 0, 0, dE[i]])
-        end
-
+        return Composite{typeof(l)}(; w_E=dw_E, w_ds=dw_ds), dk
     end
-    return map(f, x), _map_pullback
+    return Ω, lola_pullback
 end
 
 vstack(xs...) = cat((reshape(x, 1, size(x)...) for x in xs)...; dims=1)
