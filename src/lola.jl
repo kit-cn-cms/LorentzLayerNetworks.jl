@@ -55,14 +55,41 @@ function ChainRulesCore.rrule(::typeof(_map), f, x)
     return map(f, x), _map_pullback
 end
 
-(l::LoLa)(k) = vstack(
-    m².(k),
-    p_T.(k),
-    (l.w_E * E.(k)),
-    ntuple(length(l.w_ds)) do i
-        w_d²(l.w_ds[i], k, l.w_d_reducers[i])
-    end...,
-)
+#(l::LoLa)(k) = vstack(
+#    m².(k),
+#    p_T.(k),
+#    (l.w_E * E.(k)),
+#    ntuple(length(l.w_ds)) do i
+#        w_d²(l.w_ds[i], k, l.w_d_reducers[i])
+#    end...,
+#)
+
+using Compat
+include("lola_kernel.jl")
+
+# FIXME
+#_mul!(x...) = mul!(x...)
+#function _mul!(Y::CUDA.StridedCuVector, A::StridedCuMatrix, X::StridedCuVector)
+#    @assert size(A, 1) == size(Y, 1) && size(A, 2) == size(X, 1) && size(Y, 2) == size(X, 2)
+#    CUDA.CUBLAS.cublasSgemv_v2(CUDA.CUBLAS.handle(), 'N', size(A)..., true, A, stride(A, 2), X, stride(X, 1), false, Y, stride(Y, 1))
+#    return Y
+#end
+E!(_E::AbstractVector, w, k::AbstractVector) = @tullio _E[i] = w[i, j] * E(k[j])
+E!(_E::AbstractMatrix, w, k::AbstractMatrix) = @tullio _E[i, l] = w[i, j] * E(k[j, l])
+
+function (l::LoLa)(k)
+    T = eltype(eltype(k))
+    res = similar(k, T, 3 + length(l.w_ds), axes(k)...)
+    slice(i) = view(res, i, axes(k)...)
+    map!(m², slice(1), k)
+    map!(p_T, slice(2), k)
+    E!(slice(3), l.w_E, k)
+    _k = reinterpret(reshape, T, k)
+    for i in 1:length(l.w_ds)
+        wd!(slice(3 + i), l.w_ds[i], _k, l.w_d_reducers[i])
+    end
+    return res
+end
 
 using StaticArrays
 using StaticArrays: SOneTo

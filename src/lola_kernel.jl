@@ -1,4 +1,4 @@
-using Tullio, CUDA, KernelAbstractions, Zygote, FiniteDifferences, Adapt
+using Tullio, CUDA, KernelAbstractions, Adapt
 
 struct ArgMinArray{I,M,N,AI<:AbstractArray{I,N},AM<:AbstractArray{M,N}} <: AbstractArray{Tuple{I,M},N}
     idx::AI
@@ -14,7 +14,7 @@ end
 Adapt.adapt_structure(T, a::ArgMinArray) = ArgMinArray(adapt(T, a.idx), adapt(T, a.min))
 Tullio.storage_type(a::ArgMinArray) = typeof(a.min)
 
-argmin_inner(x, y) = ifelse(isless(last(x), last(y)), x, y);
+argmin_inner(x, y) = ifelse(isless(x[2], y[2]), x, y);
 
 d_kk(j, m) = :(
     (k[4, $(j...)] - k[4, $(m...)])^2 - (k[1, $(j...)] - k[1, $(m...)])^2 - (k[2, $(j...)] - k[2, $(m...)])^2 - (k[3, $(j...)] - k[3, $(m...)])^2
@@ -36,17 +36,17 @@ kernel_wd_argmin_mat = :(
 
 g(μ) = ifelse(μ == 4, 1, -1)
 kernel_wd_dk_vec = :(
-    dk[μ, i] = 2g(μ) * Δ[m] * w[j_min[m], m] * ((i == j_min[m]) - (i == m)) * (k[μ, j_min[m]] - k[μ, m])
+    dk[μ, i] += 2g(μ) * Δ[m] * w[j_min[m], m] * ((i == j_min[m]) - (i == m)) * (k[μ, j_min[m]] - k[μ, m])
 )
 kernel_wd_dk_mat = :(
-    dk[μ, i, l] = 2g(μ) * Δ[m] * w[j_min[m, l], m] * ((i == j_min[m, l]) - (i == m)) * (k[μ, j_min[m, l], l] - k[μ, m, l])
+    dk[μ, i, l] += 2g(μ) * Δ[m] * w[j_min[m, l], m] * ((i == j_min[m, l]) - (i == m)) * (k[μ, j_min[m, l], l] - k[μ, m, l])
 )
 
 kernel_wd_dw_vec = :(
-    dw[i, h] = (i == j_min[h]) * Δ[h] * $(d_kk([:(j_min[h])], [:h]))
+    dw[i, h] += (i == j_min[h]) ? Δ[h] * $(d_kk([:(j_min[h])], [:h])) : zero(T)
 )
 kernel_wd_dw_mat = :(
-    dw[i, h] = (i == j_min[h, l]) * Δ[h] * $(d_kk([:(j_min[h, l]), :l], [:h, :l]))
+    dw[i, h] += (i == j_min[h, l]) ? Δ[h] * $(d_kk([:(j_min[h, l]), :l], [:h, :l])) : zero(T)
 )
 
 
