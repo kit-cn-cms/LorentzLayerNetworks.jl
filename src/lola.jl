@@ -1,5 +1,6 @@
 using LinearAlgebra
-#using Tullio
+using Tullio
+using StaticArrays
 
 struct LoLa{A<:AbstractMatrix,T<:Tuple,Fs<:Tuple}
     w_E::A
@@ -7,73 +8,29 @@ struct LoLa{A<:AbstractMatrix,T<:Tuple,Fs<:Tuple}
     w_d_reducers::Fs
 end
 
-Flux.@functor LoLa #(w_E, w_ds)
+function Flux.update!(opt, l::LoLa, dl)
+    if haskey(dl, :w_E)
+        Flux.update!(opt, l.w_E, dl[:w_E])
+    end
+    if haskey(dl, :w_ds)
+        for i in eachindex(dl[:w_ds])
+            Flux.update!(opt, l.w_ds[i], dl[:w_ds][i])
+        end
+    end
+    return l
+end
+
+Flux.params!(p::Zygote.Params, l::LoLa, seen=IdSet()) = push!(p, l)
+Flux.params!(p::Zygote.Params, k::AbstractArray{<:SArray}, seen=IdSet()) = push!(p, k)
 
 m²(k) = sum(abs2, k)
 p_T(k) = hypot(k[1], k[2])
-
 E(k) = k[4]
 
-g(x, y) = x[4] * y[4] - x[1] * y[1] - x[2] * y[2] - x[3] * y[3] #dot(x[StaticArrays.SOneTo(3)], y[StaticArrays.SOneTo(3)])
-minkowski(x) = g(x, x)
-function ChainRulesCore.rrule(::typeof(minkowski), x)
-    function minkowski_pullback(Δ)
-        return NO_FIELDS, -2Δ * typeof(x)(-x[1], -x[2], -x[3], x[4])
-    end
-    return minkowski(x), minkowski_pullback
-end
-# Zygote._zero(xs::AbstractArray{<:StaticArray}, T) = map(zero, xs)
-function w_d²(w_d, k::AbstractVector, reducer!)
-    res = similar(k, eltype(eltype(k)))
-    reducer!(res, CartesianIndices((axes(k)..., axes(k, 1)))) do _I
-        I = Tuple(I_)
-        j, l, m = I[1], Base.front(Base.tail(I)), I[end]
-        @inbounds w_d[j, m] * minkowski(k[j, l...] - k[m, l...])
-    end
-    return res
-end
-function ChainRulesCore.rrule(::typeof(w_d²), w_d, k::AbstractMatrix, reducer)
-    function w_d²_pullback(Δ)
-        dw_d = zero(w_d)
-        dk = mapreduce(hcat, eachcol(k), eachcol(Δ)) do k, Δ
-            pb = Zygote.pullback(w_d², w_d, k, reducer)[2](Δ)
-            dw_d .+= pb[1]
-            return pb[2]
-        end
-        return NO_FIELDS, dw_d, dk, DoesNotExist()
-    end
-    return w_d²(w_d, k, reducer), w_d²_pullback
-end
-#w_d²(w_d, k::AbstractVector, reducer) = @tullio reducer k̃[j] := w_d[j, m] * minkowski(k[j] - k[m])
-#w_d²(w_d, k::AbstractMatrix, reducer) = @tullio reducer k̃[j, l] := w_d[j, m] * minkowski(k[j, l] - k[m, l])
-
-_map(f, x) = map(f, x)
-function ChainRulesCore.rrule(::typeof(_map), f, x)
-    function _map_pullback(Δ)
-        NO_FIELDS, NO_FIELDS, map((x, dx) -> Zygote.pullback(f, x)[2](dx), x, Δ)
-    end
-    return map(f, x), _map_pullback
-end
-
-#(l::LoLa)(k) = vstack(
-#    m².(k),
-#    p_T.(k),
-#    (l.w_E * E.(k)),
-#    ntuple(length(l.w_ds)) do i
-#        w_d²(l.w_ds[i], k, l.w_d_reducers[i])
-#    end...,
-#)
-
 using Compat
+
 include("lola_kernel.jl")
 
-# FIXME
-#_mul!(x...) = mul!(x...)
-#function _mul!(Y::CUDA.StridedCuVector, A::StridedCuMatrix, X::StridedCuVector)
-#    @assert size(A, 1) == size(Y, 1) && size(A, 2) == size(X, 1) && size(Y, 2) == size(X, 2)
-#    CUDA.CUBLAS.cublasSgemv_v2(CUDA.CUBLAS.handle(), 'N', size(A)..., true, A, stride(A, 2), X, stride(X, 1), false, Y, stride(Y, 1))
-#    return Y
-#end
 E!(_E::AbstractVector, w, k::AbstractVector) = @tullio _E[i] = w[i, j] * E(k[j])
 E!(_E::AbstractMatrix, w, k::AbstractMatrix) = @tullio _E[i, l] = w[i, j] * E(k[j, l])
 
@@ -97,11 +54,6 @@ function (l::LoLa)(k)
     return res
 end
 
-using StaticArrays
-using StaticArrays: SOneTo
-
-const __revise_mode__ = :evalmeth
-
 function ChainRulesCore.rrule(l::LoLa, k)
     Ω, _k = _lola3(l, k)
     pullbacks_wd = ntuple(length(l.w_ds)) do i
@@ -112,11 +64,12 @@ function ChainRulesCore.rrule(l::LoLa, k)
     function lola_pullback(Δ)
         T = eltype(Δ)
         dk = @thunk begin
-            dE = l.w_E' * slice(Δ, 3)
+            if ndims(k) == 1
+                @tullio dE[i] := $(l.w_E)[j, i] * Δ[3, j]
+            else
+                @tullio dE[i, l] := $(l.w_E)[j, i] * Δ[3, j, l]
+            end
             dk = similar(k)
-            #map!(dk, CartesianIndices(k), k) do i, k_i
-            #    @. 2Δ[1, i] * k_i + Δ[2, i] / 2Ω[2, i] * k_i + SA{T}[0, 0, 0, dE[i]]
-            #end
             map!(dk, k, slice(Δ, 1), slice(Δ, 2), slice(Ω, 2), dE) do k_i, Δ1, Δ2, Ω2, dE
                 2Δ1 * k_i + SA{eltype(Δ2)}[Δ2 / Ω2 * k_i[1], Δ2 / Ω2 * k_i[2], 0, dE]
             end
@@ -127,9 +80,9 @@ function ChainRulesCore.rrule(l::LoLa, k)
             return dk
         end
         dw_E = @thunk if ndims(k) == 1
-            @tullio dw_E[i, j] := $(slice(Δ, 3))[i] * E(k[j])
+            @tullio dw_E[i, j] := Δ[3, i] * E(k[j])
         else
-            @tullio dw_E[i, l] := $(slice(Δ, 3))[i, j] * E(k[l, j])
+            @tullio dw_E[i, l] := Δ[3, i, j] * E(k[l, j])
         end
         dw_ds = ntuple(length(l.w_ds)) do i
             @thunk begin
@@ -141,14 +94,6 @@ function ChainRulesCore.rrule(l::LoLa, k)
         return Composite{typeof(l)}(; w_E=dw_E, w_ds=dw_ds), dk
     end
     return Ω, lola_pullback
-end
-
-vstack(xs...) = cat((reshape(x, 1, size(x)...) for x in xs)...; dims=1)
-function ChainRulesCore.rrule(::typeof(vstack), x...)
-    function vstack_pullback(Δ)
-        return NO_FIELDS, ntuple(i -> @thunk(Δ[i, ntuple(_ -> :, ndims(Δ) - 1)...]), length(x))...
-    end
-    vstack(x...), vstack_pullback
 end
 
 # FiniteDifferences.to_vec(l::LoLa) = [vec(l.w_E); vec.(l.w_ds)...], v -> LoLa(reshape(v[1:length(l.w_E)], axes(l.w_E)), ntuple(i -> reshape(v[length(l.w_E) + mapreduce(i->length(l.w_ds[i]), +, 1:i-1; init=0) .+ (1:length(l.w_ds[i]))], axes(l.w_ds[i])), length(l.w_ds)), l.w_d_reducers)

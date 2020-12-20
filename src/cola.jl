@@ -81,7 +81,7 @@ end
 
 function Flux.update!(opt, c::CoLa, dc)
     if haskey(dc, :C)
-        c.C .-= Flux.update!(opt, c.C, dc[:C])
+        Flux.update!(opt, c.C, dc[:C])
     end
     return c
 end

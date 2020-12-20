@@ -13,7 +13,6 @@ Base.@propagate_inbounds function Base.setindex!(a::ArgMinArray, x, i::Int...)
 end
 Adapt.adapt_structure(T, a::ArgMinArray) = ArgMinArray(adapt(T, a.idx), adapt(T, a.min))
 Tullio.storage_type(a::ArgMinArray) = Tullio.storage_type(a.min)
-#Tullio.storage_type(a::SubArray) = typeof(a.parent)
 
 argmin_inner(x, y) = ifelse(isless(x[2], y[2]), x, y);
 
