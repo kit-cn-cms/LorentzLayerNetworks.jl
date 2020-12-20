@@ -1,7 +1,3 @@
-using LinearAlgebra
-using Tullio
-using StaticArrays
-
 struct LoLa{A<:AbstractMatrix,T<:Tuple,Fs<:Tuple}
     w_E::A
     w_ds::T
@@ -21,9 +17,7 @@ function Flux.update!(opt, l::LoLa, dl)
 end
 
 Flux.functor(l::LoLa) = (l.w_E, l.w_ds), x -> LoLa(x[1], x[2], l.w_d_reducers)
-
 Flux.params!(p::Zygote.Params, l::LoLa, seen=IdSet()) = push!(p, l)
-Flux.params!(p::Zygote.Params, k::AbstractArray{<:SArray}, seen=IdSet()) = push!(p, k)
 
 m²(k) = k[4]^2 - k[1]^2 - k[2]^2 - k[3]^2
 p_T(k) = hypot(k[1], k[2])
@@ -98,5 +92,3 @@ function ChainRulesCore.rrule(l::LoLa, k)
     end
     return Ω, lola_pullback
 end
-
-# FiniteDifferences.to_vec(l::LoLa) = [vec(l.w_E); vec.(l.w_ds)...], v -> LoLa(reshape(v[1:length(l.w_E)], axes(l.w_E)), ntuple(i -> reshape(v[length(l.w_E) + mapreduce(i->length(l.w_ds[i]), +, 1:i-1; init=0) .+ (1:length(l.w_ds[i]))], axes(l.w_ds[i])), length(l.w_ds)), l.w_d_reducers)

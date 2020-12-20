@@ -1,5 +1,3 @@
-using Tullio, CUDA, KernelAbstractions, Adapt
-
 struct ArgMinArray{I,M,N,AI<:AbstractArray{I,N},AM<:AbstractArray{M,N}} <: AbstractArray{Tuple{I,M},N}
     idx::AI
     min::AM

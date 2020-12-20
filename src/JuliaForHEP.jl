@@ -144,6 +144,12 @@ function prefix_labels(nt::NamedTuple{keys}, prefix) where {keys}
 end
 
 export CoLa, Linear, LoLa
+using Tullio, CUDA, KernelAbstractions, Adapt, Compat, LinearAlgebra
+using StaticArrays
+using ChainRulesCore
+
+# 🏴‍☠️
+Flux.params!(p::Zygote.Params, k::AbstractArray{<:SArray}, seen=IdSet()) = push!(p, k)
 
 include("cola.jl")
 include("lola.jl")
