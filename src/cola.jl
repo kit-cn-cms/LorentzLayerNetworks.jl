@@ -25,20 +25,28 @@ function _boundschecks(k_, c, k)
     @assert size(k, 2) == size(k_, 2)
 end
 
+#function _kmul!(k_, c, k, α, β; N=0)
+#    r_k_ = reinterpret(reshape, eltype(eltype(k_)), k_)
+#    r_k = reinterpret(reshape, eltype(eltype(k)), k)
+#    for μ in 1:4
+#        mul!(@view(r_k_[μ, N+1:end, :]), c, view(r_k, μ, :, :), α, β)
+#    end
+#    return k_
+#end
+using Tullio, CUDA, KernelAbstractions
 function _kmul!(k_, c, k, α, β; N=0)
-    r_k_ = reinterpret(reshape, eltype(eltype(k_)), k_)
-    r_k = reinterpret(reshape, eltype(eltype(k)), k)
-    @show summary.((k_, c, k))
-    @show summary.((r_k_, c, r_k))
-    for μ in 1:4
-        mul!(@view(r_k_[μ, N+1:end, :]), c, view(r_k, μ, :, :), α, β)
+    @assert α == 1 && β == 0
+    if ndims(k) == 1
+        @tullio k_[i] = c[i, j] * k[j]
+    else
+        @tullio k_[i, l] = c[i, j] * k[j, l]
     end
     return k_
 end
 function _mul!(k_, c, k, α, β, _add)
     N = size(k, 1)
     @inbounds k_[1:N, :] .= _add.(k, view(k_, 1:N, :))
-    _kmul!(k_, c.C, k, α, β; N)
+    _kmul!(@view(k_[N+1:end, Base.tail(axes(k_))...]), c.C, k, α, β)
     return k_
 end
 
@@ -61,6 +69,10 @@ function _kmul(c, k)
     return k_
 end
 
+using Adapt
+Adapt.adapt_structure(T, c::CoLa) = CoLa(adapt(T, c.C))
+Tullio.storage_type(c::CoLa) = Tullio.storage_type(c.C)
+
 function ChainRulesCore.rrule(
     ::typeof(*),
     c::CoLa{<:Union{Real,Complex}},
@@ -71,10 +83,25 @@ function ChainRulesCore.rrule(
         dc = @thunk let
             N = size(k, 1)
             #dC = adjoint.(@view(Δ[N+1:end, :])) * t(k)
-            dC = _kmul(adjoint.(@view(Δ[N+1:end, :])), t(k))
+            #dC = _kmul(adjoint.(@view(Δ[N+1:end, :])), t(k))
+            _Δ = @view(Δ[N+1:end, Base.tail(axes(Δ))...])
+            if ndims(k) == 1
+                @tullio dC[i, j] := _Δ[i]' * k[j]
+            else
+                @tullio dC[i, l] := _Δ[i, j]' * k[l, j]
+            end
             Composite{typeof(dC)}(; C = dC)
         end
-        return NO_FIELDS, dc, @thunk(c' * Δ)
+        dk = @thunk let
+            if ndims(k) == 1
+                dk = similar(Δ, axes(c, 2))
+                @tullio dk[i] = c[j, i] * Δ[j]
+            else
+                dk = similar(Δ, axes(c, 2), axes(Δ, 2))
+                @tullio dk[i, l] = c[j, i] * Δ[j, l]
+            end
+        end
+        return NO_FIELDS, dc, dk
     end
     return c * k, mul_pullback
 end
