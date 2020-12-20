@@ -20,6 +20,8 @@ function Flux.update!(opt, l::LoLa, dl)
     return l
 end
 
+Flux.functor(l::LoLa) = (l.w_E, l.w_ds), x -> LoLa(x[1], x[2], l.w_d_reducers)
+
 Flux.params!(p::Zygote.Params, l::LoLa, seen=IdSet()) = push!(p, l)
 Flux.params!(p::Zygote.Params, k::AbstractArray{<:SArray}, seen=IdSet()) = push!(p, k)
 
