@@ -25,7 +25,7 @@ Flux.functor(l::LoLa) = (l.w_E, l.w_ds), x -> LoLa(x[1], x[2], l.w_d_reducers)
 Flux.params!(p::Zygote.Params, l::LoLa, seen=IdSet()) = push!(p, l)
 Flux.params!(p::Zygote.Params, k::AbstractArray{<:SArray}, seen=IdSet()) = push!(p, k)
 
-m²(k) = sum(abs2, k)
+m²(k) = k[4]^2 - k[1]^2 - k[2]^2 - k[3]^2
 p_T(k) = hypot(k[1], k[2])
 E(k) = k[4]
 
@@ -73,7 +73,8 @@ function ChainRulesCore.rrule(l::LoLa, k)
             end
             dk = similar(k)
             map!(dk, k, slice(Δ, 1), slice(Δ, 2), slice(Ω, 2), dE) do k_i, Δ1, Δ2, Ω2, dE
-                2Δ1 * k_i + SA{eltype(Δ2)}[Δ2 / Ω2 * k_i[1], Δ2 / Ω2 * k_i[2], 0, dE]
+                2Δ1 * SA[-k_i[1], -k_i[2], -k_i[3], k_i[4]] +
+                    SA[Δ2 / Ω2 * k_i[1], Δ2 / Ω2 * k_i[2], 0, dE]
             end
             _dk = reinterpret(reshape, T, dk)
             for i in 1:length(l.w_ds)
