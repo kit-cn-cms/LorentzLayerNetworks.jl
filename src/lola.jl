@@ -100,6 +100,8 @@ end
 using StaticArrays
 using StaticArrays: SOneTo
 
+const __revise_mode__ = :evalmeth
+
 function ChainRulesCore.rrule(l::LoLa, k)
     Ω, _k = _lola3(l, k)
     pullbacks_wd = ntuple(length(l.w_ds)) do i
@@ -112,19 +114,22 @@ function ChainRulesCore.rrule(l::LoLa, k)
         dk = @thunk begin
             dE = l.w_E' * slice(Δ, 3)
             dk = similar(k)
-            map!(dk, CartesianIndices(k), k) do i, k_i
-                @. 2Δ[1, i] * k_i + Δ[2, i] / 2Ω[2, i] * k_i + SA{T}[0, 0, 0, dE[i]]
+            #map!(dk, CartesianIndices(k), k) do i, k_i
+            #    @. 2Δ[1, i] * k_i + Δ[2, i] / 2Ω[2, i] * k_i + SA{T}[0, 0, 0, dE[i]]
+            #end
+            map!(dk, k, slice(Δ, 1), slice(Δ, 2), slice(Ω, 2), dE) do k_i, Δ1, Δ2, Ω2, dE
+                2Δ1 * k_i + SA{eltype(Δ2)}[Δ2 / Ω2 * k_i[1], Δ2 / Ω2 * k_i[2], 0, dE]
             end
             _dk = reinterpret(reshape, T, dk)
             for i in 1:length(l.w_ds)
-                pullbacks_wd[1][2](_dk, slice(Δ, 3 + i))
+                pullbacks_wd[i][2](_dk, slice(Δ, 3 + i))
             end
             return dk
         end
         dw_E = @thunk if ndims(k) == 1
-            @tullio dw_E[1, i] := $(l.w_E)[j, i] * E(k[j])
+            @tullio dw_E[i, j] := $(slice(Δ, 3))[i] * E(k[j])
         else
-            @tullio dw_E[i, l] := $(l.w_E)[i, j] * E(k[l, j])
+            @tullio dw_E[i, l] := $(slice(Δ, 3))[i, j] * E(k[l, j])
         end
         dw_ds = ntuple(length(l.w_ds)) do i
             @thunk begin
@@ -145,3 +150,5 @@ function ChainRulesCore.rrule(::typeof(vstack), x...)
     end
     vstack(x...), vstack_pullback
 end
+
+# FiniteDifferences.to_vec(l::LoLa) = [vec(l.w_E); vec.(l.w_ds)...], v -> LoLa(reshape(v[1:length(l.w_E)], axes(l.w_E)), ntuple(i -> reshape(v[length(l.w_E) + mapreduce(i->length(l.w_ds[i]), +, 1:i-1; init=0) .+ (1:length(l.w_ds[i]))], axes(l.w_ds[i])), length(l.w_ds)), l.w_d_reducers)
