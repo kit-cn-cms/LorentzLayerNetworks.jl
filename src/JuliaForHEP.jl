@@ -1,5 +1,7 @@
 module JuliaForHEP
 
+const __revise_mode__ = :sigs
+
 using Flux, Zygote, CUDA, WeightedOnlineStats, ProgressMeter
 using Pandas: read_hdf
 import Random
@@ -36,10 +38,10 @@ end
 
 Extract features given by `column_names` from all files in `h5files` and concatenate them.
 """
-function extract_cols(h5files, column_names)
+function extract_cols(h5files, column_names, idx=:)
     return mapreduce(hcat, h5files) do f
         df = read_hdf(f)
-        PermutedDimsArray(Array(df[column_names]), (2, 1))
+        PermutedDimsArray(Array(df[column_names][idx]), (2, 1))
     end
 end
 
@@ -150,6 +152,7 @@ using ChainRulesCore
 
 # 🏴‍☠️
 Flux.params!(p::Zygote.Params, k::AbstractArray{<:SArray}, seen=IdSet()) = push!(p, k)
+Flux.fmap(f, a::AbstractArray{<:SArray}) = f(a)
 
 include("cola.jl")
 include("lola.jl")

@@ -43,7 +43,7 @@ kernel_wd_dw_add_vec = :(
     dw[i, h] += Δ[h] * $(d_kk([:i], [:h]))
 )
 kernel_wd_dw_add_mat = :(
-    dw[i, h, l] += Δ[h, l] * $(d_kk([:i, :l], [:h, :l]))
+    dw[i, h] += Δ[h, l] * $(d_kk([:i, :l], [:h, :l]))
 )
 
 g(μ) = ifelse(μ == 4, 1, -1)

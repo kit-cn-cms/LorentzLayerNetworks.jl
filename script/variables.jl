@@ -57,6 +57,35 @@ variables["ge4j_ge3t"] = [
     "RecoX_jet2_CvsB_deepJet",
 
 ]
+variables["lorentzlayer"] = [
+    #"N_Jets",
+    #"N_BTagsM",
+
+    "Jet_X[0]",
+    "Jet_Y[0]",
+    "Jet_Z[0]",
+    "Jet_T[0]",
+    "Jet_X[1]",
+    "Jet_Y[1]",
+    "Jet_Z[1]",
+    "Jet_T[1]",
+    "Jet_X[2]",
+    "Jet_Y[2]",
+    "Jet_Z[2]",
+    "Jet_T[2]",
+    "Jet_X[3]",
+    "Jet_Y[3]",
+    "Jet_Z[3]",
+    "Jet_T[3]",
+    "Jet_X[4]",
+    "Jet_Y[4]",
+    "Jet_Z[4]",
+    "Jet_T[4]",
+    "Jet_X[5]",
+    "Jet_Y[5]",
+    "Jet_Z[5]",
+    "Jet_T[5]",
+ ]
 
 weights = [
     "Weight_XS",

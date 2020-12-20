@@ -4,14 +4,17 @@ authors = ["Simeon Schaub <simeondavidschaub99@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Pandas = "eadc2687-ae89-51f9-a5d9-86b5a6373a9c"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 WeightedOnlineStats = "bbac0a1f-7c9d-5672-960b-c6ca726e5d5d"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"

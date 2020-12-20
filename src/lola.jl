@@ -50,6 +50,43 @@ function (l::LoLa)(k)
     return res
 end
 
+function dw_E(Δ, k)
+    if ndims(k) == 1
+        @tullio dw_E[i, j] := Δ[3, i] * E(k[j])
+    else
+        @tullio dw_E[i, l] := Δ[3, i, j] * E(k[l, j])
+    end
+end
+
+function _dE(w_E, Δ)
+    if ndims(Δ) == 2
+        @tullio dE[i] := w_E[j, i] * Δ[3, j]
+    else
+        @tullio dE[i, l] := w_E[j, i] * Δ[3, j, l]
+    end
+end
+
+function dk(l, k, Δ, Ω, pullbacks_wd)
+    dE = _dE(l.w_E, Δ)
+    dk = similar(k)
+    map!(dk, k, slice(Δ, 1), slice(Δ, 2), slice(Ω, 2), dE) do k_i, Δ1, Δ2, Ω2, dE
+        2Δ1 * SA[-k_i[1], -k_i[2], -k_i[3], k_i[4]] +
+            SA[Δ2 / Ω2 * k_i[1], Δ2 / Ω2 * k_i[2], 0, dE]
+    end
+    _dk = reinterpret(reshape, eltype(Δ), dk)
+    for i in 1:length(l.w_ds)
+        pullbacks_wd[i][2](_dk, slice(Δ, 3 + i))
+    end
+    return dk
+end
+function dw_ds(l, Δ, pullbacks_wd)
+    ntuple(length(l.w_ds)) do i
+        dw_d = reinterpret(reshape, eltype(Δ), zero(l.w_ds[i]))
+        pullbacks_wd[i][1](dw_d, slice(Δ, 3 + i))
+        return dw_d
+    end
+end
+
 function ChainRulesCore.rrule(l::LoLa, k)
     Ω, _k = _lola3(l, k)
     pullbacks_wd = ntuple(length(l.w_ds)) do i
@@ -58,37 +95,10 @@ function ChainRulesCore.rrule(l::LoLa, k)
     end
 
     function lola_pullback(Δ)
-        T = eltype(Δ)
-        dk = @thunk begin
-            if ndims(k) == 1
-                @tullio dE[i] := $(l.w_E)[j, i] * Δ[3, j]
-            else
-                @tullio dE[i, l] := $(l.w_E)[j, i] * Δ[3, j, l]
-            end
-            dk = similar(k)
-            map!(dk, k, slice(Δ, 1), slice(Δ, 2), slice(Ω, 2), dE) do k_i, Δ1, Δ2, Ω2, dE
-                2Δ1 * SA[-k_i[1], -k_i[2], -k_i[3], k_i[4]] +
-                    SA[Δ2 / Ω2 * k_i[1], Δ2 / Ω2 * k_i[2], 0, dE]
-            end
-            _dk = reinterpret(reshape, T, dk)
-            for i in 1:length(l.w_ds)
-                pullbacks_wd[i][2](_dk, slice(Δ, 3 + i))
-            end
-            return dk
-        end
-        dw_E = @thunk if ndims(k) == 1
-            @tullio dw_E[i, j] := Δ[3, i] * E(k[j])
-        else
-            @tullio dw_E[i, l] := Δ[3, i, j] * E(k[l, j])
-        end
-        dw_ds = ntuple(length(l.w_ds)) do i
-            @thunk begin
-                dw_d = reinterpret(reshape, T, zero(l.w_ds[i]))
-                pullbacks_wd[i][1](dw_d, slice(Δ, 3 + i))
-                return dw_d
-            end
-        end
-        return Composite{typeof(l)}(; w_E=dw_E, w_ds=dw_ds), dk
+        return (
+            Composite{typeof(l)}(; w_E=dw_E(Δ, k), w_ds=dw_ds(l, Δ, pullbacks_wd)),
+            dk(l, k, Δ, Ω, pullbacks_wd),
+        )
     end
     return Ω, lola_pullback
 end
