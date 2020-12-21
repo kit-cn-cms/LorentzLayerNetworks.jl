@@ -4,6 +4,10 @@ struct LoLa{A<:AbstractMatrix,T<:Tuple,Fs<:Tuple}
     w_d_reducers::Fs
 end
 
+function LoLa(n::Int, w_d_reducers::Tuple; init=Flux.glorot_uniform)
+    return LoLa(init(n, n), ntuple(_ -> init(n, n), length(w_d_reducers)), w_d_reducers)
+end
+
 function Flux.update!(opt, l::LoLa, dl)
     if haskey(dl, :w_E)
         Flux.update!(opt, l.w_E, dl[:w_E])

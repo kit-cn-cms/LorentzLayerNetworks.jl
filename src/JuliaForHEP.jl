@@ -145,7 +145,8 @@ function prefix_labels(nt::NamedTuple{keys}, prefix) where {keys}
     return NamedTuple{Symbol.(prefix, keys)}(Tuple(nt))
 end
 
-export CoLa, Linear, LoLa
+export CoLa, Linear, LoLa, LorentzSidechain
+
 using Tullio, CUDA, KernelAbstractions, Adapt, Compat, LinearAlgebra
 using StaticArrays
 using ChainRulesCore
@@ -153,8 +154,18 @@ using ChainRulesCore
 # 🏴‍☠️
 Flux.params!(p::Zygote.Params, k::AbstractArray{<:SArray}, seen=IdSet()) = push!(p, k)
 Flux.fmap(f, a::AbstractArray{<:SArray}) = f(a)
+using ChainRulesCore: backing
+Zygote.accum(x::Union{NamedTuple,Composite}, y::Union{NamedTuple,Composite}) = Zygote.accum(backing(x), backing(y))
+
+function ChainRulesCore.rrule(::typeof(reinterpret), ::typeof(reshape), ::Type{T}, x::AbstractArray) where {T}
+    function reinterpret_reshape_pullback(Δ)
+        return NO_FIELDS, NO_FIELDS, NO_FIELDS, reinterpret(reshape, eltype(x), Δ)
+    end
+    return reinterpret(reshape, T, x), reinterpret_reshape_pullback
+end
 
 include("cola.jl")
 include("lola.jl")
+include("lorentz_sidechain.jl")
 
 end

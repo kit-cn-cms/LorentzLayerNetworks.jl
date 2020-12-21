@@ -100,3 +100,5 @@ end
 Flux.@functor Linear
 
 (l::Linear)(x) = l.m * x
+
+cola(n_jets::Int, n_lincomb::Int; init=Flux.glorot_uniform) = Linear(CoLa(init(n_lincomb, n_jets)))

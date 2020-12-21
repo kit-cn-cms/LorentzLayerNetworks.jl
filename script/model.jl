@@ -14,11 +14,17 @@ include("variables.jl")
 basedir = "/local/scratch/ssd/sschaub/h5files/ttH-processed/"
 h5files = joinpath.(basedir, ["ttH_ttH.h5", "ttbb_ttH.h5", "ttcc_ttH.h5", "ttlf_ttH.h5"])
 
-raw_inputs = extract_cols(h5files, mapreduce(vcat, 0:5) do i
-    ["Jet_X[$i]", "Jet_Y[$i]", "Jet_Z[$i]", "Jet_T[$i]"]
-end)#, 1:1000)
-raw_inputs = Float32.(reshape(raw_inputs, 4, 6, :))
-raw_inputs = reinterpret(reshape, SVector{4,Float32}, raw_inputs)
+feature_names = [
+    mapreduce(vcat, 0:5) do i
+        ["Jet_X[$i]", "Jet_Y[$i]", "Jet_Z[$i]", "Jet_T[$i]"]
+    end;
+    "TightLepton_" .* ["X", "Y", "Z", "T"];
+    string.("Jet_btagValue[", 0:5, "]");
+]
+raw_inputs = extract_cols(h5files, feature_names)#, 1:1000)
+raw_inputs = Float32.(raw_inputs)
+#raw_inputs = Float32.(reshape(raw_inputs, 4, 6, :))
+#raw_inputs = reinterpret(reshape, SVector{4,Float32}, raw_inputs)
 #inputs = Flux.normalise(raw_inputs; dims=2)
 inputs = raw_inputs
 
@@ -39,17 +45,16 @@ ds_validation = DataLoader(ds_validation; batchsize=128, shuffle=false)
 ds_test = DataLoader(ds_test; batchsize=512, shuffle=false)
 
 n_input, n_output = size(inputs, 1), 4
+n_jets = 7
 n_hidden = [200, 200]
 
 _leakyrelu(x) = max(x * 0.3f0, x)
 
 dbg(x) = (@show summary(x); x)
 model = Chain(
-    Linear(CoLa(rand(Float32, 15, n_input))),
-    LoLa(rand(Float32, n_input+15, n_input+15), ntuple(_ -> rand(Float32, n_input+15, n_input+15), 4), (+, +, min, min)),
-    Flux.flatten,
+    LorentzSidechain(7, 15),
     x -> Flux.normalise(x; dims=2),
-    foldl(n_hidden; init=((), (n_input+15)*7)) do (c, n_in), n_out
+    foldl(n_hidden; init=((), (n_jets+15)*7 + 6)) do (c, n_in), n_out
         (c..., Dense(n_in, n_out, _leakyrelu), Dropout(0.1)), n_out
     end[1]...,
     Dense(n_hidden[end], n_output),
