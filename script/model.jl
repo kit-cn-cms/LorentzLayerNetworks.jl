@@ -39,7 +39,7 @@ ds_validation = DataLoader(ds_validation; batchsize=128, shuffle=false)
 ds_test = DataLoader(ds_test; batchsize=512, shuffle=false)
 
 n_input, n_output = size(inputs, 1), 4
-n_hidden = [200, 200] # [200, 200, 200]
+n_hidden = [200, 200]
 
 _leakyrelu(x) = max(x * 0.3f0, x)
 
@@ -48,6 +48,7 @@ model = Chain(
     Linear(CoLa(rand(Float32, 15, n_input))),
     LoLa(rand(Float32, n_input+15, n_input+15), ntuple(_ -> rand(Float32, n_input+15, n_input+15), 4), (+, +, min, min)),
     Flux.flatten,
+    x -> Flux.normalise(x; dims=2),
     foldl(n_hidden; init=((), (n_input+15)*7)) do (c, n_in), n_out
         (c..., Dense(n_in, n_out, _leakyrelu), Dropout(0.1)), n_out
     end[1]...,
@@ -58,16 +59,19 @@ optimizer = ADAGrad(0.001)
 optimizer = ADAM(5e-5)
 
 let ps = Flux.params(model)
-    global penalty() = sum(x -> norm(x .+ 1e-8), ps)
+    nrm(x::AbstractArray) = norm(x .+ 1e-8)
+    nrm(x::CoLa) = nrm(x.C)
+    nrm(x::LoLa) = nrm(x.w_E) + sum(nrm, x.w_ds)
+    global penalty() = sum(nrm, ps)
 end
-loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) #+ 1e-5 * penalty()
+loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1e-5 * penalty()
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 
 using StatsPlots
 
 recorded_measures = DataFrame()
-for i in 1:100
+for i in 1:200
     @info "Epoch $i"
     train, test, validation = step!(
         model, ds_train, ds_test, ds_validation;
@@ -87,9 +91,9 @@ for i in 1:100
     )
     display(plt)
 
-    if i >= 20
-        if argmin(recorded_measures[!, :test_loss]) <= i - 5
-            @info "Loss has not decreased in the last 5 epochs, stopping training"
+    if i >= 10
+        if argmin(recorded_measures[!, :test_loss]) <= i - 3
+            @info "Loss has not decreased in the last 3 epochs, stopping training"
             break
         elseif test.loss / train.loss > 1.1
             @info "Test loss more than 10% greater than training loss, stopping training"
@@ -100,8 +104,8 @@ end
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/foo"
-mkdir(output_dir)
+output_dir = "/work/sschaub/JuliaForHEP/foo4"
+isdir(output_dir) || mkdir(output_dir)
 
 Plots.savefig(joinpath(output_dir, "losses.pdf"))
 

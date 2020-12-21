@@ -23,7 +23,7 @@ end
 function accuracy(ŷ::CuMatrix{T}, y::AbstractMatrix{Bool}) where {T}
     _a = CuArray{T}(undef)
     @cuda threads=size(ŷ, 2) _accuracy_kernel!(_a, ŷ, y)
-    return _a[]
+    return CUDA.@allowscalar _a[]
 end
 
 function _accuracy_kernel!(_a, ŷ, y)
