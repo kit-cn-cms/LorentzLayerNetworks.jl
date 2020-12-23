@@ -17,5 +17,5 @@ end
 
 function (s::LorentzSidechain)(x)
     #return [s.layers(view(x, 1:4*s.n_jets, :)); view(x, 4*s.n_jets+1:size(x, 1), :)]
-    return [s.layers(x[1:4*s.n_jets, :]); x[4*s.n_jets+1:size(x, 1), :]]
+    return [s.layers(x[1:4*s.n_jets, :]); view(x, 4*s.n_jets+1:size(x, 1), :)]
 end

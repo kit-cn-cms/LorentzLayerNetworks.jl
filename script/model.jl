@@ -11,16 +11,33 @@ Random.seed!(123)
 include("variables.jl")
 
 #basedir = "/work/sschaub/h5files/ttH-processed/"
-basedir = "/local/scratch/ssd/sschaub/h5files/ttH-processed/"
-h5files = joinpath.(basedir, ["ttH_ttH.h5", "ttbb_ttH.h5", "ttcc_ttH.h5", "ttlf_ttH.h5"])
+basedir = "/local/scratch/ssd/sschaub/h5files/ttH_sebastian-processed/"
+h5files = joinpath.(basedir, ["ttH", "ttbb", "ttcc", "ttlf"] .* "_lola.h5")
 
 feature_names = [
     mapreduce(vcat, 0:5) do i
         ["Jet_X[$i]", "Jet_Y[$i]", "Jet_Z[$i]", "Jet_T[$i]"]
     end;
-    "TightLepton_" .* ["X", "Y", "Z", "T"];
-    string.("Jet_btagValue[", 0:5, "]");
+    "TightLepton_" .* ["X", "Y", "Z", "T"] .* "[0]";
+    string.("Jet_CSV[", 0:5, "]");
 ]
+append!(feature_names, [
+    "Evt_CSV_avg_tagged",
+    "Evt_CSV_avg",
+    "Evt_M_minDrLepTag",
+    "Evt_Pt_JetsAverage",
+    "Evt_Pt_minDrTaggedJets",
+    "Evt_Deta_TaggedJetsAverage",
+    "Evt_Deta_JetsAverage",
+    #"N_Jets",
+    "Reco_JABDT_ttbar_Jet_CSV_whaddau2",
+    "Reco_ttbar_toplep_m",
+    "Reco_tHq_bestJABDToutput",
+    "Reco_JABDT_tHq_abs_ljet_eta",
+    "Reco_JABDT_tHq_Jet_CSV_hdau1",
+    "Reco_JABDT_tHW_Jet_CSV_btop",
+    #"memDBp",
+])
 raw_inputs = extract_cols(h5files, feature_names)#, 1:1000)
 raw_inputs = Float32.(raw_inputs)
 #raw_inputs = Float32.(reshape(raw_inputs, 4, 6, :))
@@ -28,8 +45,9 @@ raw_inputs = Float32.(raw_inputs)
 #inputs = Flux.normalise(raw_inputs; dims=2)
 inputs = raw_inputs
 
+classes = [:ttH, :ttbb, :ttcc, :ttlf]
 outputs = Symbol.(extract_cols(h5files, ["class_label"]))
-outputs_onehot = Flux.onehotbatch(vec(outputs), [:ttH, :ttbb, :ttcc, :ttlf])
+outputs_onehot = Flux.onehotbatch(vec(outputs), classes)
 
 weights = prod(Float32, extract_cols(h5files, Vars.weights); dims=1)
 total_weights = scale_weights(weights, outputs)
@@ -40,13 +58,15 @@ ds_train, ds_validation, ds_test = split_datasets(
     [.75 * .8, .75 * .2, .25],
 )
 idx_train, idx_validation, idx_test = last.((ds_train, ds_validation, ds_test))
-ds_train = DataLoader(ds_train; batchsize=512, shuffle=true)
-ds_validation = DataLoader(ds_validation; batchsize=128, shuffle=false)
-ds_test = DataLoader(ds_test; batchsize=512, shuffle=false)
+ds_train = DataLoader(ds_train; batchsize=1024, shuffle=true)
+ds_validation = DataLoader(ds_validation; batchsize=1024, shuffle=false)
+ds_test = DataLoader(ds_test; batchsize=1024, shuffle=false)
 
 n_input, n_output = size(inputs, 1), 4
 n_jets = 7
-n_hidden = [200, 200]
+n_scalar_input = n_input - 4n_jets
+#n_hidden = [200, 200, 200]
+n_hidden = [1024,2048,512,512]
 
 _leakyrelu(x) = max(x * 0.3f0, x)
 
@@ -54,8 +74,8 @@ dbg(x) = (@show summary(x); x)
 model = Chain(
     LorentzSidechain(7, 15),
     x -> Flux.normalise(x; dims=2),
-    foldl(n_hidden; init=((), (n_jets+15)*7 + 6)) do (c, n_in), n_out
-        (c..., Dense(n_in, n_out, _leakyrelu), Dropout(0.1)), n_out
+    foldl(n_hidden; init=((), (n_jets+15)*7 + n_scalar_input)) do (c, n_in), n_out
+        (c..., Dense(n_in, n_out, _leakyrelu), Dropout(0.5)), n_out
     end[1]...,
     Dense(n_hidden[end], n_output),
 ) |> gpu
@@ -96,9 +116,9 @@ for i in 1:200
     )
     display(plt)
 
-    if i >= 10
-        if argmin(recorded_measures[!, :test_loss]) <= i - 3
-            @info "Loss has not decreased in the last 3 epochs, stopping training"
+    if i >= 20
+        if argmin(recorded_measures[!, :test_loss]) <= i - 5
+            @info "Loss has not decreased in the last 5 epochs, stopping training"
             break
         elseif test.loss / train.loss > 1.1
             @info "Test loss more than 10% greater than training loss, stopping training"
@@ -109,7 +129,7 @@ end
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/foo4"
+output_dir = "/work/sschaub/JuliaForHEP/foo5"
 isdir(output_dir) || mkdir(output_dir)
 
 Plots.savefig(joinpath(output_dir, "losses.pdf"))
@@ -119,30 +139,39 @@ Arrow.write(
     recorded_measures,
 )
 
-#Arrow.write(
-#    joinpath(output_dir, "layer_params.arrow"),
-#    DataFrame((Symbol(i % Bool ? :W_ : :b_, fld1(i, 2)) => [p] for (i, p) in enumerate(Flux.params(model)))...)
-#)
-#
-#all_features = DataFrame();
-#ŷ = softmax(model(gpu(inputs))) |> cpu
-#for (label, idx) in [
-#    :train => idx_train,
-#    :test => idx_test,
-#    :validation => idx_validation,
-#]
-#    idx = cpu(idx)
-#    input_features = Symbol.(Vars.variables["ge4j_ge3t"]) .=> eachrow(view(raw_inputs, :, idx))
-#    input_features_norm = Symbol.(Vars.variables["ge4j_ge3t"], :_norm) .=> eachrow(view(inputs, :, idx))
-#    output_expected = :output_expected => outputs[idx]
-#    output_predicted = [Symbol(:output_predicted_, l) => ŷ[i, idx] for (i, l) in enumerate([:Hbb, :Zbb])]
-#    _weights = [:weights => weights[idx], :weights_norm => total_weights[idx]]
-#    kind = :kind => fill(label, length(idx))
-#    append!(all_features, DataFrame(input_features..., input_features_norm..., output_expected, output_predicted..., _weights..., kind))
+Arrow.ArrowTypes.registertype!(CoLa, CoLa)
+Arrow.ArrowTypes.registertype!(LoLa, LoLa)
+
+#let ps = Flux.params(cpu(model)) |> collect
+#    cola = popfirst!(ps)
+#    @assert cola isa CoLa
+#    lola = popfirst!(ps)
+#    @assert lola isa LoLa
+#    Arrow.write(
+#        joinpath(output_dir, "layer_params.arrow"),
+#        DataFrame(:cola => [cola], :lola => [lola], (Symbol(i % Bool ? :W_ : :b_, fld1(i, 2)) => [p] for (i, p) in enumerate(ps))...)
+#    )
 #end
-#
-#Arrow.write(
-#    joinpath(output_dir, "all_features.arrow"),
-#    all_features,
-#)
+
+all_features = DataFrame();
+ŷ = softmax(model(gpu(inputs))) |> cpu
+for (label, idx) in [
+    :train => idx_train,
+    :test => idx_test,
+    :validation => idx_validation,
+]
+    idx = cpu(idx)
+    input_features = Symbol.(feature_names) .=> eachrow(view(raw_inputs, :, idx))
+    #input_features_norm = Symbol.(Vars.variables["ge4j_ge3t"], :_norm) .=> eachrow(view(inputs, :, idx))
+    output_expected = :output_expected => outputs[idx]
+    output_predicted = [Symbol(:output_predicted_, l) => ŷ[i, idx] for (i, l) in enumerate(classes)]
+    _weights = [:weights => weights[idx], :weights_norm => total_weights[idx]]
+    kind = :kind => fill(label, length(idx))
+    append!(all_features, DataFrame(input_features..., #=input_features_norm..., =#output_expected, output_predicted..., _weights..., kind))
+end
+
+Arrow.write(
+    joinpath(output_dir, "all_features.arrow"),
+    all_features,
+)
 

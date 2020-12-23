@@ -89,7 +89,8 @@ variables["lorentzlayer"] = [
 
 weights = [
     "Weight_XS",
-    "Weight_btagSF",
+    #"Weight_btagSF",
+    "Weight_CSV",
     "Weight_GEN_nom",
     "lumiWeight",
 ]
