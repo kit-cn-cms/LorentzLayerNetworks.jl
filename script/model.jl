@@ -65,7 +65,6 @@ ds_test = DataLoader(ds_test; batchsize=1024, shuffle=false)
 n_input, n_output = size(inputs, 1), 4
 n_jets = 7
 n_scalar_input = n_input - 4n_jets
-#n_hidden = [200, 200, 200]
 n_hidden = [1024,2048,512,512]
 
 _leakyrelu(x) = max(x * 0.3f0, x)
@@ -80,16 +79,15 @@ model = Chain(
     Dense(n_hidden[end], n_output),
 ) |> gpu
 
-optimizer = ADAGrad(0.001)
 optimizer = ADAM(5e-5)
 
 let ps = Flux.params(model)
-    nrm(x::AbstractArray) = norm(x .+ 1e-8)
+    nrm(x::AbstractArray) = norm(x .+ 1f-8)^2
     nrm(x::CoLa) = nrm(x.C)
     nrm(x::LoLa) = nrm(x.w_E) + sum(nrm, x.w_ds)
     global penalty() = sum(nrm, ps)
 end
-loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1e-5 * penalty()
+loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty()
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 
@@ -129,7 +127,7 @@ end
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/foo5"
+output_dir = "/work/sschaub/JuliaForHEP/foo7"
 isdir(output_dir) || mkdir(output_dir)
 
 Plots.savefig(joinpath(output_dir, "losses.pdf"))
@@ -139,19 +137,21 @@ Arrow.write(
     recorded_measures,
 )
 
-Arrow.ArrowTypes.registertype!(CoLa, CoLa)
-Arrow.ArrowTypes.registertype!(LoLa, LoLa)
-
-#let ps = Flux.params(cpu(model)) |> collect
-#    cola = popfirst!(ps)
-#    @assert cola isa CoLa
-#    lola = popfirst!(ps)
-#    @assert lola isa LoLa
-#    Arrow.write(
-#        joinpath(output_dir, "layer_params.arrow"),
-#        DataFrame(:cola => [cola], :lola => [lola], (Symbol(i % Bool ? :W_ : :b_, fld1(i, 2)) => [p] for (i, p) in enumerate(ps))...)
-#    )
-#end
+let ps = Flux.params(cpu(model)) |> collect
+    cola = popfirst!(ps)
+    @assert cola isa CoLa
+    lola = popfirst!(ps)
+    @assert lola isa LoLa
+    Arrow.write(
+        joinpath(output_dir, "layer_params.arrow"),
+        DataFrame(
+            :cola => [cola.C],
+            :lola_w_E => [lola.w_E],
+            (Symbol(:lola_w_d_, i) => [lola.w_ds[i]] for i in eachindex(lola.w_ds))...,
+            (Symbol(i % Bool ? :W_ : :b_, fld1(i, 2)) => [p] for (i, p) in enumerate(ps))...,
+        )
+    )
+end
 
 all_features = DataFrame();
 ŷ = softmax(model(gpu(inputs))) |> cpu
