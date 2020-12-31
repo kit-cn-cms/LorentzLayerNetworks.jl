@@ -6,6 +6,8 @@ using Random
 using LinearAlgebra
 using Compat
 using StaticArrays
+using StatsPlots
+
 Random.seed!(123)
 
 include("variables.jl")
@@ -29,7 +31,7 @@ append!(feature_names, [
     "Evt_Pt_minDrTaggedJets",
     "Evt_Deta_TaggedJetsAverage",
     "Evt_Deta_JetsAverage",
-    #"N_Jets",
+    "N_Jets",
     "Reco_JABDT_ttbar_Jet_CSV_whaddau2",
     "Reco_ttbar_toplep_m",
     "Reco_tHq_bestJABDToutput",
@@ -50,6 +52,8 @@ outputs = Symbol.(extract_cols(h5files, ["class_label"]))
 outputs_onehot = Flux.onehotbatch(vec(outputs), classes)
 
 weights = prod(Float32, extract_cols(h5files, Vars.weights); dims=1)
+idx = view(inputs, findfirst(==("N_Jets"), feature_names), :) .<= 6
+inputs, outputs_onehot, weights = inputs[:, idx], outputs_onehot[:, idx], weights[:, idx]
 total_weights = scale_weights(weights, outputs)
 
 ds_train, ds_validation, ds_test = split_datasets(
@@ -69,11 +73,33 @@ n_hidden = [1024,2048,512,512]
 
 _leakyrelu(x) = max(x * 0.3f0, x)
 
+#using Hyperopt
+
+_sum(f, ::Tuple{}) = 0f0
+_sum(f, t::Tuple) = sum(f, t)
+using Zygote
+Zygote._pullback(::typeof(_sum), f, ::Tuple{}) = 0f0, Δ -> (nothing, nothing, ())
+Zygote._pullback(::typeof(_sum), f, t::Tuple) = Zygote._pullback(sum, f, t)
+
+j = 1
+
+#opt_res = @hyperopt for i=50, sampler=RandomSampler(),
+#    m = 0:25,
+#    n_wd_sum = 0:5,
+#    n_wd_min = 0:5
+
+m = 15
+n_wd_sum = 2
+n_wd_min = 2
+
 dbg(x) = (@show summary(x); x)
 model = Chain(
-    LorentzSidechain(7, 15),
+    LorentzSidechain(
+        n_jets, m,
+        (ntuple(_ -> +, n_wd_sum)..., ntuple(_ -> min, n_wd_min)...),
+    ),
     x -> Flux.normalise(x; dims=2),
-    foldl(n_hidden; init=((), (n_jets+15)*7 + n_scalar_input)) do (c, n_in), n_out
+    foldl(n_hidden; init=((), (n_jets + m) * (3 + n_wd_sum + n_wd_min) + n_scalar_input)) do (c, n_in), n_out
         (c..., Dense(n_in, n_out, _leakyrelu), Dropout(0.5)), n_out
     end[1]...,
     Dense(n_hidden[end], n_output),
@@ -81,17 +107,15 @@ model = Chain(
 
 optimizer = ADAM(5e-5)
 
-let ps = Flux.params(model)
-    nrm(x::AbstractArray) = norm(x .+ 1f-8)^2
+penalty = let ps = Flux.params(model)
+    nrm(x::AbstractArray) = norm(abs.(x) .+ eps(0f0))^2
     nrm(x::CoLa) = nrm(x.C)
-    nrm(x::LoLa) = nrm(x.w_E) + sum(nrm, x.w_ds)
-    global penalty() = sum(nrm, ps)
+    nrm(x::LoLa) = nrm(x.w_E) + _sum(nrm, x.w_ds)
+    penalty() = sum(nrm, ps)
 end
 loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty()
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
-
-using StatsPlots
 
 recorded_measures = DataFrame()
 for i in 1:200
@@ -124,10 +148,19 @@ for i in 1:200
         end
     end
 end
+#j += 1
+#    recorded_measures.test_loss[end]
+#catch e
+#    @warn "caught error: $e"
+#    NaN32
+#end
+#end
+#using Serialization
+#serialize("hyperopt50.bin", opt_res)
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/foo7"
+output_dir = "/work/sschaub/JuliaForHEP/foo8"
 isdir(output_dir) || mkdir(output_dir)
 
 Plots.savefig(joinpath(output_dir, "losses.pdf"))
@@ -174,4 +207,3 @@ Arrow.write(
     joinpath(output_dir, "all_features.arrow"),
     all_features,
 )
-

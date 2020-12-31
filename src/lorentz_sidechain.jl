@@ -5,11 +5,11 @@ end
 
 Flux.@functor LorentzSidechain
 
-function LorentzSidechain(n_jets::Int, n_lincomb::Int)
+function LorentzSidechain(n_jets::Int, n_lincomb::Int, reducers=(+, +, min, min))
     layers = Chain(
         x -> reinterpret(reshape, SVector{4,Float32}, reshape(x, 4, n_jets, :)),
         cola(n_jets, n_lincomb),
-        LoLa(n_jets + n_lincomb, (+, +, min, min)),
+        LoLa(n_jets + n_lincomb, reducers),
         Flux.flatten,
     )
     return LorentzSidechain(layers, n_jets)

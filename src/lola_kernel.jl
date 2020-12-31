@@ -83,7 +83,7 @@ for (N, kernel, kernel_argmin, kernel_dk_add, kernel_dw_add, kernel_dk_min, kern
 
     @eval function wd_adjoint!(_f::AbstractArray{T,$N}, w, k::AbstractArray{<:Any,$(N+1)}, ::typeof(min)) where {T}
         f = ArgMinArray(similar(_f, Int), _f)
-        @tullio (argmin_inner) $kernel_argmin init=(0, typemax(T))
+        @tullio (argmin_inner) $kernel_argmin init=(1, typemax(T))
         j_min = f.idx
         function wd_pullback_w!(dw, Δ)
             @tullio $kernel_dw_min
