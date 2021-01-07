@@ -1,12 +1,14 @@
 using JuliaForHEP
+using JuliaForHEP: step!
 using Flux
 using Flux: Data.DataLoader
 using DataFrames
 using Random
 using LinearAlgebra
 using Compat
-using StaticArrays
-using StatsPlots
+using CairoMakie, ColorSchemes
+CairoMakie.activate!(type="png")
+set_theme!(Attributes(resolution=(1000, 750)))
 
 Random.seed!(123)
 
@@ -73,26 +75,10 @@ n_hidden = [1024,2048,512,512]
 
 _leakyrelu(x) = max(x * 0.3f0, x)
 
-#using Hyperopt
-
-_sum(f, ::Tuple{}) = 0f0
-_sum(f, t::Tuple) = sum(f, t)
-using Zygote
-Zygote._pullback(::typeof(_sum), f, ::Tuple{}) = 0f0, Δ -> (nothing, nothing, ())
-Zygote._pullback(::typeof(_sum), f, t::Tuple) = Zygote._pullback(sum, f, t)
-
-j = 1
-
-#opt_res = @hyperopt for i=50, sampler=RandomSampler(),
-#    m = 0:25,
-#    n_wd_sum = 0:5,
-#    n_wd_min = 0:5
-
 m = 15
 n_wd_sum = 2
 n_wd_min = 2
 
-dbg(x) = (@show summary(x); x)
 model = Chain(
     LorentzSidechain(
         n_jets, m,
@@ -110,7 +96,7 @@ optimizer = ADAM(5e-5)
 penalty = let ps = Flux.params(model)
     nrm(x::AbstractArray) = norm(abs.(x) .+ eps(0f0))^2
     nrm(x::CoLa) = nrm(x.C)
-    nrm(x::LoLa) = nrm(x.w_E) + _sum(nrm, x.w_ds)
+    nrm(x::LoLa) = nrm(x.w_E) + sum(nrm, x.w_ds)
     penalty() = sum(nrm, ps)
 end
 loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty()
@@ -132,11 +118,20 @@ for i in 1:200
         merge(prefix_labels.((train, test, validation), (:train_, :test_, :validation_))...),
     )
 
-    plt = @df recorded_measures Plots.plot(
-        [:train_loss, :test_loss, :validation_loss],
-        labels=["train loss" "test loss" "validation loss"],
-    )
-    display(plt)
+    let
+        global scene, layout = layoutscene()
+        ax = layout[1, 1] = Axis(scene)
+        plts = map(1:3, [:train_loss, :test_loss, :validation_loss]) do i, loss
+            lines!(
+                ax,
+                getproperty(recorded_measures, loss),
+                color=ColorSchemes.Set1_4[i],
+                linewidth=2,
+            )
+        end
+        layout[1, 2] = Legend(scene, plts, ["train", "test", "validations"], "losses", framevisible=false)
+        display(scene)
+    end
 
     if i >= 20
         if argmin(recorded_measures[!, :test_loss]) <= i - 5
@@ -148,22 +143,13 @@ for i in 1:200
         end
     end
 end
-#j += 1
-#    recorded_measures.test_loss[end]
-#catch e
-#    @warn "caught error: $e"
-#    NaN32
-#end
-#end
-#using Serialization
-#serialize("hyperopt50.bin", opt_res)
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/foo8"
+output_dir = "/work/sschaub/JuliaForHEP/foo9"
 isdir(output_dir) || mkdir(output_dir)
 
-Plots.savefig(joinpath(output_dir, "losses.pdf"))
+save(joinpath(output_dir, "losses.pdf"), scene)
 
 Arrow.write(
     joinpath(output_dir, "recorded_measures.arrow"),
