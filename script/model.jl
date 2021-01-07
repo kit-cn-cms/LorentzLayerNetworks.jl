@@ -142,7 +142,7 @@ end
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/foo9"
+output_dir = "/work/sschaub/JuliaForHEP/foo10"
 isdir(output_dir) || mkdir(output_dir)
 
 fig.savefig(joinpath(output_dir, "losses.pdf"))
