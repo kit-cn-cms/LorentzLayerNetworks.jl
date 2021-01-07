@@ -6,9 +6,7 @@ using DataFrames
 using Random
 using LinearAlgebra
 using Compat
-using CairoMakie, ColorSchemes
-CairoMakie.activate!(type="png")
-set_theme!(Attributes(resolution=(1000, 750)))
+using PyPlot
 
 Random.seed!(123)
 
@@ -119,18 +117,16 @@ for i in 1:200
     )
 
     let
-        global scene, layout = layoutscene()
-        ax = layout[1, 1] = Axis(scene)
-        plts = map(1:3, [:train_loss, :test_loss, :validation_loss]) do i, loss
-            lines!(
-                ax,
+        global fig, ax = subplots()
+        losses = ["train_loss", "test_loss", "validation_loss"]
+        plts = foreach(1:3, losses) do i, loss
+            ax.plot(
                 getproperty(recorded_measures, loss),
-                color=ColorSchemes.Set1_4[i],
-                linewidth=2,
+                label=loss
             )
         end
-        layout[1, 2] = Legend(scene, plts, ["train", "test", "validations"], "losses", framevisible=false)
-        display(scene)
+        ax.legend()
+        display(fig)
     end
 
     if i >= 20
@@ -149,7 +145,7 @@ using Arrow
 output_dir = "/work/sschaub/JuliaForHEP/foo9"
 isdir(output_dir) || mkdir(output_dir)
 
-save(joinpath(output_dir, "losses.pdf"), scene)
+fig.savefig(joinpath(output_dir, "losses.pdf"))
 
 Arrow.write(
     joinpath(output_dir, "recorded_measures.arrow"),
