@@ -99,7 +99,7 @@ penalty = let ps = Flux.params(model)
 end
 loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty()
 
-measures = (; loss=st->st.loss, )#accuracy=st->accuracy(softmax(st.ŷ), st.y))
+measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 
 recorded_measures = DataFrame()
 for i in 1:200
@@ -142,7 +142,7 @@ end
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/foo10"
+output_dir = "/work/sschaub/JuliaForHEP/lola+scalars"
 isdir(output_dir) || mkdir(output_dir)
 
 fig.savefig(joinpath(output_dir, "losses.pdf"))
