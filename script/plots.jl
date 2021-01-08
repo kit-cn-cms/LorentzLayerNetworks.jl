@@ -2,6 +2,8 @@ using Arrow, DataFrames
 using PyPlot
 using Printf
 
+_reshape(a, dims...) = invoke(Base._reshape, Tuple{AbstractArray, Base.Dims}, a, Base._reshape_uncolon(a, dims))
+
 #layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
 all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
 
@@ -27,8 +29,8 @@ for ((kind,), df) in pairs(groupby(all_features, :kind))
     outputs_onehot = Flux.onehotbatch(df.output_expected, classes)
 
     confusion_mat = sum(
-        reshape(Flux.onehotbatch(Flux.onecold(ŷ, classes), classes), 1, 4, :) .===
-            reshape(outputs_onehot, 4, 1, :);
+        _reshape(Flux.onehotbatch(Flux.onecold(ŷ, classes), classes), 1, 4, :) .===
+            _reshape(outputs_onehot, 4, 1, :);
         dims=3,
     )
     confusion_mat = confusion_mat ./ sum(confusion_mat; dims=2)
