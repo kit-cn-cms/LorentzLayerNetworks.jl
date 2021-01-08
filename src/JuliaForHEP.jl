@@ -164,6 +164,8 @@ function ChainRulesCore.rrule(::typeof(reinterpret), ::typeof(reshape), ::Type{T
     return reinterpret(reshape, T, x), reinterpret_reshape_pullback
 end
 
+include("reinterpret_reshape.jl")
+
 include("cola.jl")
 include("lola.jl")
 include("lorentz_sidechain.jl")
