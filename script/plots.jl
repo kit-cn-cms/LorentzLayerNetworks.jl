@@ -5,23 +5,25 @@ using Printf
 #layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
 all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
 
-fig1, ax1 = subplots()
+fig1, axs1 = subplots(ncols=2, nrows=2, figsize=(12, 9))
 linestyles = (train = "-", test = "--", validation="-.")
 for ((kind,), df) in pairs(groupby(all_features, :kind))
-    #foreach(pairs(groupby(df, :output_expected, sort=true)), [:C0, :C1]) do ((class,), df), color
-    #    ax1.hist(
-    #        df.output_predicted_Hbb;
-    #        label="true $class ($kind)", density=true,
-    #        bins=30, histtype=:step, color, ls=linestyles[kind],
-    #    )
-    #end
+    foreach(pairs(groupby(df, :output_expected, sort=true)), [:C0, :C1, :C2, :C3]) do ((class,), df), color
+        foreach(axs1, classes) do ax1, class_predicted
+            ax1.hist(
+                df[!, Symbol(:output_predicted_, class_predicted)];
+                label="true $class ($kind)", density=true,
+                bins=30, histtype=:step, color, ls=linestyles[kind],
+            )
+        end
+    end
 
     ŷ = mapreduce(vcat, classes) do class
         df[!, Symbol(:output_predicted_, class)]'
     end
     outputs_onehot = Flux.onehotbatch(df.output_expected, classes)
 
-    confusion_mat = count(reshape(Flux.onehotbatch(Flux.onecold(ŷ, classes), classes), 1, 4, :) .=== reshape(outputs_onehot, 4, 1, :); dims=3)
+    confusion_mat = sum(reshape(Flux.onehotbatch(Flux.onecold(ŷ, classes), classes), 1, 4, :) .=== reshape(outputs_onehot, 4, 1, :); dims=3)
     confusion_mat = confusion_mat ./ sum(confusion_mat; dims=2)
 
     fig, ax = subplots()
@@ -59,8 +61,12 @@ for ((kind,), df) in pairs(groupby(all_features, :kind))
     #fig.savefig(joinpath(output_dir, "roc_curve_$kind.pdf"))
 end
 
-#ax1.set_xlabel("p(Hbb)")
-#ax1.legend()
+foreach(axs1, classes) do ax1, class_predicted
+    ax1.set_title(String(class_predicted))
+    ax1.set_xlabel("p($class_predicted)")
+    ax1.legend()
+end
 #fig1.suptitle("Predicted Hbb")
-#fig1.savefig(joinpath(output_dir, "output_features_hist.pdf"))
+fig1.tight_layout()
+fig1.savefig(joinpath(output_dir, "output_features_hist.pdf"))
 
