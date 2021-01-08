@@ -2,7 +2,7 @@ module JuliaForHEP
 
 const __revise_mode__ = :sigs
 
-using Flux, Zygote, CUDA, WeightedOnlineStats, ProgressMeter
+using Flux, Zygote, CUDA, WeightedOnlineStats, ProgressMeter, Statistics
 using Pandas: read_hdf
 import Random
 
@@ -15,22 +15,7 @@ export accuracy, extract_cols, scale_weights, split_indices, split_datasets, wei
 Calculate accuracy of predictions `ŷ` against ground truth `y`.
 """
 function accuracy(ŷ::AbstractMatrix{T}, y::AbstractMatrix{Bool}) where {T}
-    _a = Ref{T}()
-    _accuracy_kernel!(_a, ŷ, y)
-    return _a[]
-end
-
-function accuracy(ŷ::CuMatrix{T}, y::AbstractMatrix{Bool}) where {T}
-    _a = CuArray{T}(undef)
-    @cuda threads=size(ŷ, 2) _accuracy_kernel!(_a, ŷ, y)
-    return CUDA.@allowscalar _a[]
-end
-
-function _accuracy_kernel!(_a, ŷ, y)
-    _a[] = count(axes(ŷ, 2)) do i
-        @inbounds y[argmax(view(ŷ, :, i)), i]
-    end / convert(eltype(_a), size(ŷ, 2))
-    nothing
+    return mean(Flux.onecold(ŷ) .== Flux.onecold(y))
 end
 
 """
