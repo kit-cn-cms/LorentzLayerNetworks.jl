@@ -52,8 +52,8 @@ outputs = Symbol.(extract_cols(h5files, ["class_label"]))
 outputs_onehot = Flux.onehotbatch(vec(outputs), classes)
 
 weights = prod(Float32, extract_cols(h5files, Vars.weights); dims=1)
-idx = view(inputs, findfirst(==("N_Jets"), feature_names), :) .<= 6
-inputs, outputs_onehot, weights = inputs[:, idx], outputs_onehot[:, idx], weights[:, idx]
+#idx = view(inputs, findfirst(==("N_Jets"), feature_names), :) .<= 6
+#inputs, outputs_onehot, weights = inputs[:, idx], outputs_onehot[:, idx], weights[:, idx]
 total_weights = scale_weights(weights, outputs)
 
 ds_train, ds_validation, ds_test = split_datasets(
@@ -102,7 +102,7 @@ loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 
 recorded_measures = DataFrame()
-for i in 1:200
+for i in 1:100
     @info "Epoch $i"
     train, test, validation = step!(
         model, ds_train, ds_test, ds_validation;
@@ -129,9 +129,9 @@ for i in 1:200
         display(fig)
     end
 
-    if i >= 50
-        if argmin(recorded_measures[!, :test_loss]) <= i - 7
-            @info "Loss has not decreased in the last 7 epochs, stopping training"
+    if i >= 90
+        if argmin(recorded_measures[!, :test_loss]) <= i - 10
+            @info "Loss has not decreased in the last 10 epochs, stopping training"
             break
         elseif test.loss / train.loss > 1.1
             @info "Test loss more than 10% greater than training loss, stopping training"
@@ -142,7 +142,7 @@ end
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/lola+scalars"
+output_dir = "/work/sschaub/JuliaForHEP/lola+scalars3/"
 isdir(output_dir) || mkdir(output_dir)
 
 fig.savefig(joinpath(output_dir, "losses.pdf"))
@@ -153,18 +153,27 @@ Arrow.write(
 )
 
 let ps = Flux.params(cpu(model)) |> collect
-    cola = popfirst!(ps)
-    @assert cola isa CoLa
-    lola = popfirst!(ps)
-    @assert lola isa LoLa
-    Arrow.write(
-        joinpath(output_dir, "layer_params.arrow"),
-        DataFrame(
+    df = DataFrame()
+    if n_jets > 0
+        cola = popfirst!(ps)
+        @assert cola isa CoLa
+        lola = popfirst!(ps)
+        @assert lola isa LoLa
+        df = DataFrame(
             :cola => [cola.C],
             :lola_w_E => [lola.w_E],
             (Symbol(:lola_w_d_, i) => [lola.w_ds[i]] for i in eachindex(lola.w_ds))...,
+        )
+    end
+    df = hcat(
+        df,
+        DataFrame(
             (Symbol(i % Bool ? :W_ : :b_, fld1(i, 2)) => [p] for (i, p) in enumerate(ps))...,
         )
+    )
+    Arrow.write(
+        joinpath(output_dir, "layer_params.arrow"),
+        df,
     )
 end
 
