@@ -11,23 +11,21 @@ using PyPlot
 Random.seed!(123)
 
 include("variables.jl")
+include("model.jl")
 
 #basedir = "/work/sschaub/h5files/ttH-processed/"
 basedir = "/local/scratch/ssd/sschaub/h5files/ttH_sebastian-processed/"
 h5files = joinpath.(basedir, ["ttH", "ttbb", "ttcc", "ttlf"] .* "_lola.h5")
 
-features = Vars.all_features
-raw_inputs = extract_cols(h5files, feature_names)#, 1:1000)
-raw_inputs = Float32.(raw_inputs)
-inputs = raw_inputs
+feature_names = Vars.all_features
+inputs = extract_cols(h5files, feature_names)
+inputs = Float32.(inputs)
 
-using Vars: classes
+using .Vars: classes
 outputs = Symbol.(extract_cols(h5files, ["class_label"]))
 outputs_onehot = Flux.onehotbatch(vec(outputs), classes)
 
 weights = prod(Float32, extract_cols(h5files, Vars.weights); dims=1)
-#idx = view(inputs, findfirst(==("N_Jets"), feature_names), :) .<= 6
-#inputs, outputs_onehot, weights = inputs[:, idx], outputs_onehot[:, idx], weights[:, idx]
 total_weights = scale_weights(weights, outputs)
 
 ds_train, ds_validation, ds_test = split_datasets(
@@ -40,38 +38,20 @@ ds_train = DataLoader(ds_train; batchsize=1024, shuffle=true)
 ds_validation = DataLoader(ds_validation; batchsize=1024, shuffle=false)
 ds_test = DataLoader(ds_test; batchsize=1024, shuffle=false)
 
-n_input, n_output = size(inputs, 1), 4
-n_jets = 7
-n_scalar_input = n_input - 4n_jets
-n_hidden = [1024,2048,512,512]
-
-_leakyrelu(x) = max(x * 0.3f0, x)
-
-m = 15
-n_wd_sum = 2
-n_wd_min = 2
-
-model = Chain(
-    LorentzSidechain(
-        n_jets, m,
-        (ntuple(_ -> +, n_wd_sum)..., ntuple(_ -> min, n_wd_min)...),
-    ),
-    x -> Flux.normalise(x; dims=2),
-    foldl(n_hidden; init=((), (n_jets + m) * (3 + n_wd_sum + n_wd_min) + n_scalar_input)) do (c, n_in), n_out
-        (c..., Dense(n_in, n_out, _leakyrelu), Dropout(0.5)), n_out
-    end[1]...,
-    Dense(n_hidden[end], n_output),
+model = build_model(;
+    m = 15,
+    n_jets = length(Vars.jets) ÷ 4,
+    n_inputs = size(inputs, 1),
+    n_outputs = length(classes),
+    w_d_reducers = ((+) => 2, min => 2),
+    neurons = [1024, 2048, 512, 512],
+    activation = _leakyrelu,
+    dropout = Dropout(0.5),
 ) |> gpu
 
 optimizer = ADAM(5e-5)
 
-penalty = let ps = Flux.params(model)
-    nrm(x::AbstractArray) = norm(abs.(x) .+ eps(0f0))^2
-    nrm(x::CoLa) = nrm(x.C)
-    nrm(x::LoLa) = nrm(x.w_E) + sum(nrm, x.w_ds)
-    penalty() = sum(nrm, ps)
-end
-loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty()
+loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty(model)
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 
