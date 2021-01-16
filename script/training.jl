@@ -51,7 +51,14 @@ model = build_model(;
 
 optimizer = ADAM(5e-5)
 
-loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty(model)
+#penalty = l2_penalty(model)
+penalty = let ps = Flux.params(model)
+    nrm(x::AbstractArray) = norm(abs.(x) .+ eps(0f0))^2
+    nrm(x::CoLa) = nrm(x.C)
+    nrm(x::LoLa) = nrm(x.w_E) + sum(nrm, x.w_ds)
+    penalty() = sum(nrm, ps)
+end
+loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty()
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 

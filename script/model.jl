@@ -24,11 +24,14 @@ function build_model(; m, n_jets, n_inputs, n_outputs, w_d_reducers, neurons, ac
             n_outputs,
             activation,
             dropout,
-        ),
+        )...,
     )
 end
 
-penalty(model) = sum(_nrm2, Flux.params(model))
+function l2_penalty(model)
+    ps = Flux.params(model)
+    return () -> sum(_nrm2, ps)
+end
 _nrm2(x::AbstractArray) = norm(abs.(x) .+ eps(0f0))^2
 _nrm2(x::CoLa) = _nrm2(x.C)
-_nrm2(x::LoLa) = _nrm2(x.w_E) + sum(_nrm2, x.w_ds; init=0.0)
+_nrm2(x::LoLa) = _nrm2(x.w_E) + sum(_nrm2, x.w_ds)
