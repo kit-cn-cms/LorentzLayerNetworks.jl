@@ -24,7 +24,7 @@ function build_model(; m, n_jets, n_inputs, n_outputs, w_d_reducers, neurons, ac
             n_outputs,
             activation,
             dropout,
-        )...,
+        ),
     )
 end
 
