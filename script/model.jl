@@ -33,5 +33,5 @@ function l2_penalty(model)
     return () -> sum(_nrm2, ps)
 end
 _nrm2(x::AbstractArray) = norm(abs.(x) .+ eps(0f0))^2
-_nrm2(x::CoLa) = _nrm2(x.C)
+_nrm2(x::CoLa) = sum(v -> abs(_nrm2(v) - 1), eachcol(x.C))
 _nrm2(x::LoLa) = _nrm2(x.w_E) + sum(_nrm2, x.w_ds)

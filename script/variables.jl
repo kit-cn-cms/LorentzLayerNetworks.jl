@@ -24,7 +24,7 @@ scalar_features = [
     #"memDBp",
 ]
 
-all_features = [jets; tight_lepton; jet_csv]
+all_features = [jets; tight_lepton; jet_csv; scalar_features]
 
 weights = [
     "Weight_XS",

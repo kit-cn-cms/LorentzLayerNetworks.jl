@@ -46,6 +46,7 @@ n_outputs = length(classes)
 model = build_model(;
     m, n_jets, n_inputs, n_outputs,
     w_d_reducers = ((+) => 2, min => 2),
+    #w_d_reducers = (min => 4,),
     neurons = [1024, 2048, 512, 512],
     activation = _leakyrelu,
     dropout = Dropout(0.5),
@@ -54,17 +55,18 @@ model = build_model(;
 optimizer = ADAM(5e-5)
 
 penalty = l2_penalty(model)
-loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty()
+loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights))# + 1f-5 * penalty()
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 
 recorded_measures = DataFrame()
 
 # pretrain Lo+CoLa
-n_outputs_lola = (n_jets + m) * (3 + 4)
+n_outputs_lola = (n_jets + m) * (3 + 4) + length(Vars.jet_csv)
 _model = Chain(
     model[1:end-1]...,
-    x -> view(x, 1:n_outputs_lola, :),
+    #x -> view(x, 1:n_outputs_lola, :),
+    x -> x[1:n_outputs_lola, :],
     build_dnn(;
         n_inputs = n_outputs_lola,
         neurons = [1024, 2048, 512, 512],
@@ -76,19 +78,19 @@ _model = Chain(
 train!(;
     model=_model, ds_train, ds_test, ds_validation,
     loss, optimizer, measures, recorded_measures,
-    max_epochs=50, min_epochs=50, early_stopping_n=10, early_stopping_percentage=10,
+    max_epochs=50, min_epochs=50, early_stopping_n=10, early_stopping_percentage=2,
 )
 
 # main training
 train!(;
     model, ds_train, ds_test, ds_validation,
     loss, optimizer, measures, recorded_measures,
-    max_epochs=100, min_epochs=90, early_stopping_n=10, early_stopping_percentage=10,
+    max_epochs=120, min_epochs=50, early_stopping_n=10, early_stopping_percentage=2,
 )
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/lola+scalars3/"
+output_dir = "/work/sschaub/JuliaForHEP/lola+scalars8/"
 isdir(output_dir) || mkdir(output_dir)
 
 fig.savefig(joinpath(output_dir, "losses.pdf"))
@@ -131,7 +133,7 @@ for (label, idx) in [
     :validation => idx_validation,
 ]
     idx = cpu(idx)
-    input_features = Symbol.(feature_names) .=> eachrow(view(raw_inputs, :, idx))
+    input_features = Symbol.(feature_names) .=> eachrow(view(inputs, :, idx))
     #input_features_norm = Symbol.(Vars.variables["ge4j_ge3t"], :_norm) .=> eachrow(view(inputs, :, idx))
     output_expected = :output_expected => outputs[idx]
     output_predicted = [Symbol(:output_predicted_, l) => ŷ[i, idx] for (i, l) in enumerate(classes)]
