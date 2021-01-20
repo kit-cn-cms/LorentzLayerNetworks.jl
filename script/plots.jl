@@ -2,6 +2,10 @@ using Arrow, DataFrames, Flux
 using PyPlot
 using Printf
 using Trapz
+using Statistics
+
+include("variables.jl")
+using .Vars: classes
 
 _reshape(a, dims...) = invoke(Base._reshape, Tuple{AbstractArray, Base.Dims}, a, Base._reshape_uncolon(a, dims))
 
@@ -105,6 +109,26 @@ for ((kind,), df) in pairs(groupby(all_features, :kind))
     fig_roc.suptitle("ROC curves - $kind")
     fig_roc.tight_layout()
     fig_roc.savefig(joinpath(output_dir, "roc_curves_$kind.pdf"))
+
+    _features = [Vars.all_features; string.("output_predicted_", classes)]
+    n = length(_features)
+    vars = df[!, _features]
+    correlations = [cor(u, v) for u in eachcol(vars), v in eachcol(vars)]
+    fig, ax = subplots(figsize=(15, 12))
+    img = ax.imshow(correlations; vmin=-1, vmax=1)
+    fig.colorbar(img)
+    ax.set_xticks(axes(vars, 2).-1)
+    ax.set_xticklabels(_features; rotation=90)
+    ax.set_yticks(axes(vars, 2).-1)
+    ax.set_yticklabels(_features)
+    # dividers
+    for (i, opts) in zip([4*7 + 6, n - 4], [(; linestyle=:dashed, linewidth=1), (; linewidth=3)])
+        ax.vlines(i - .5, -.5, n - .5; color=:red, opts...)
+        ax.hlines(i - .5, -.5, n - .5; color=:red, opts...)
+    end
+    fig.suptitle("Correlations - $kind")
+    fig.tight_layout()
+    fig.savefig(joinpath(output_dir, "correlations_$kind.pdf"))
 end
 
 foreach(axs1, classes) do ax1, class_predicted
