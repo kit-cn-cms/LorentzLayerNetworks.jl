@@ -23,7 +23,7 @@ function train!(;
             plts = foreach(1:3, losses) do i, loss
                 ax.plot(
                     getproperty(recorded_measures, loss),
-                    label=loss
+                    label=replace(loss, '_' => ' '),
                 )
             end
             ax.legend()

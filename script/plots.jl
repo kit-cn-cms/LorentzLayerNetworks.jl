@@ -9,8 +9,19 @@ using .Vars: classes
 
 _reshape(a, dims...) = invoke(Base._reshape, Tuple{AbstractArray, Base.Dims}, a, Base._reshape_uncolon(a, dims))
 
-#layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
+matplotlib.rc("text", usetex=true)
+
+layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
 all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
+
+ls = LorentzSidechain(7, 15)
+ps = Flux.params(ls)
+ps[1].C |> vec .= layer_params.cola[]
+ps[2].w_E |> vec .= layer_params.lola_w_E[]
+for i in 1:length(ps[2].w_ds)
+    ps[2].w_ds[i] |> vec .= layer_params[1, Symbol(:lola_w_d_, i)]
+end
+ls = gpu(ls)
 
 fig1, axs1 = subplots(ncols=2, nrows=2, figsize=(12, 9))
 linestyles = (train = "-", test = "--", validation="-.")
@@ -111,10 +122,16 @@ for ((kind,), df) in pairs(groupby(all_features, :kind))
     fig_roc.savefig(joinpath(output_dir, "roc_curves_$kind.pdf"))
 
     _features = [Vars.all_features; string.("output_predicted_", classes)]
+    #_features = replace.(_features, r"Jet_T\[(\d)\]" => s"Jet_E[\1]")
+    #_features = _features[4*7+6+1:end]
+    _features = [Vars.names_lola_out; _features[4*7+1:end]]
     n = length(_features)
-    vars = df[!, _features]
+    vars = df[!, _features]# |> cpu∘ls∘permutedims∘gpu∘Matrix
+    #vars = cpu(ls(permutedims(gpu(Matrix(vars)))))
+    #vars = cpu(Zygote.pullback(ls, permutedims(gpu(Matrix(vars))))[1])
+    _features = string.("\\verb|", _features, "|")
     correlations = [cor(u, v) for u in eachcol(vars), v in eachcol(vars)]
-    fig, ax = subplots(figsize=(15, 12))
+    fig, ax = subplots(figsize=(14, 12.5))
     img = ax.imshow(correlations; vmin=-1, vmax=1)
     fig.colorbar(img)
     ax.set_xticks(axes(vars, 2).-1)
@@ -122,7 +139,8 @@ for ((kind,), df) in pairs(groupby(all_features, :kind))
     ax.set_yticks(axes(vars, 2).-1)
     ax.set_yticklabels(_features)
     # dividers
-    for (i, opts) in zip([4*7 + 6, n - 4], [(; linestyle=:dashed, linewidth=1), (; linewidth=3)])
+    #for (i, opts) in zip([n - 4], [(; linewidth=3)])
+    for (i, opts) in zip([7*7 + 6, n - 4], [(; linestyle=:dashed, linewidth=1), (; linewidth=3)])
         ax.vlines(i - .5, -.5, n - .5; color=:red, opts...)
         ax.hlines(i - .5, -.5, n - .5; color=:red, opts...)
     end

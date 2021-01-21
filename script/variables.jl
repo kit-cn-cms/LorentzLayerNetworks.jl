@@ -1,9 +1,9 @@
 module Vars
 
 jets = mapreduce(vcat, 0:5) do i
-    ["Jet_X[$i]", "Jet_Y[$i]", "Jet_Z[$i]", "Jet_T[$i]"]
+    ["Jet_Px[$i]", "Jet_Py[$i]", "Jet_Pz[$i]", "Jet_E[$i]"]
 end
-tight_lepton = "TightLepton_" .* ["X", "Y", "Z", "T"] .* "[0]"
+tight_lepton = "TightLepton_" .* ["Px", "Py", "Pz", "E"] .* "[0]"
 jet_csv = string.("Jet_CSV[", 0:5, "]")
 
 scalar_features = [
@@ -35,5 +35,13 @@ weights = [
 ]
 
 classes = [:ttH, :ttbb, :ttcc, :ttlf]
+
+
+names_lola_out = [
+    mapreduce(vcat, 0:5) do i
+        ["Jet_m²[$i]"; "Jet_p_T[$i]"; "Jet_weighted_E[$i]"; string.("Jet_weighted_d", 1:4, "[$i]")]
+    end
+    ["Lepton_m²"; "Lepton_p_T"; "Lepton_weighted_E"; string.("Lepton_weighted_d", 1:4)]
+]
 
 end

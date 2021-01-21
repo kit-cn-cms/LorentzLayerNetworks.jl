@@ -40,7 +40,7 @@ ds_validation = DataLoader(ds_validation; batchsize=1024, shuffle=false)
 ds_test = DataLoader(ds_test; batchsize=1024, shuffle=false)
 
 m = 15
-n_jets = length(Vars.jets) ÷ 4
+n_jets = length([Vars.jets; Vars.tight_lepton]) ÷ 4
 n_inputs = size(inputs, 1)
 n_outputs = length(classes)
 model = build_model(;
@@ -55,7 +55,7 @@ model = build_model(;
 optimizer = ADAM(5e-5)
 
 penalty = l2_penalty(model)
-loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights))# + 1f-5 * penalty()
+loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty()
 
 measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 
@@ -90,7 +90,7 @@ train!(;
 
 using Arrow
 
-output_dir = "/work/sschaub/JuliaForHEP/lola+scalars8/"
+output_dir = "/work/sschaub/JuliaForHEP/lola+scalars11/"
 isdir(output_dir) || mkdir(output_dir)
 
 fig.savefig(joinpath(output_dir, "losses.pdf"))
@@ -127,6 +127,7 @@ end
 
 all_features = DataFrame();
 ŷ = softmax(model(gpu(inputs))) |> cpu
+lola_out = model[1](gpu(inputs))[1:length(Vars.names_lola_out), :] |> cpu
 for (label, idx) in [
     :train => idx_train,
     :test => idx_test,
@@ -139,7 +140,15 @@ for (label, idx) in [
     output_predicted = [Symbol(:output_predicted_, l) => ŷ[i, idx] for (i, l) in enumerate(classes)]
     _weights = [:weights => weights[idx], :weights_norm => total_weights[idx]]
     kind = :kind => fill(label, length(idx))
-    append!(all_features, DataFrame(input_features..., #=input_features_norm..., =#output_expected, output_predicted..., _weights..., kind))
+    _lola_out = Symbol.(Vars.names_lola_out) .=> eachrow(view(lola_out, :, idx))
+    append!(all_features, DataFrame(
+        input_features...,
+        output_expected,
+        output_predicted...,
+        _weights...,
+        _lola_out...,
+        kind,
+    ))
 end
 
 Arrow.write(
