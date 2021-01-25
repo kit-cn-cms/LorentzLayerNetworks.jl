@@ -13,14 +13,14 @@ Random.seed!(123)
 include("variables.jl")
 include("model.jl")
 include("training.jl")
+include("save_model.jl")
 
 #basedir = "/work/sschaub/h5files/ttH-processed/"
 basedir = "/local/scratch/ssd/sschaub/h5files/ttH_sebastian-processed/"
 h5files = joinpath.(basedir, ["ttH", "ttbb", "ttcc", "ttlf"] .* "_lola.h5")
 
 feature_names = Vars.all_features
-inputs = extract_cols(h5files, feature_names)
-inputs = Float32.(inputs)
+inputs = extract_cols(h5files, feature_names) .|> Float32
 
 using .Vars: classes
 outputs = Symbol.(extract_cols(h5files, ["class_label"]))
@@ -78,80 +78,25 @@ _model = Chain(
 train!(;
     model=_model, ds_train, ds_test, ds_validation,
     loss, optimizer, measures, recorded_measures,
-    max_epochs=50, min_epochs=50, early_stopping_n=10, early_stopping_percentage=2,
+    max_epochs=20, min_epochs=50, early_stopping_n=10, early_stopping_percentage=2,
 )
 
 # main training
 train!(;
     model, ds_train, ds_test, ds_validation,
     loss, optimizer, measures, recorded_measures,
-    max_epochs=120, min_epochs=50, early_stopping_n=10, early_stopping_percentage=2,
+    max_epochs=120, min_epochs=50, early_stopping_n=7, early_stopping_percentage=2,
 )
 
-using Arrow
-
-output_dir = "/work/sschaub/JuliaForHEP/lola+scalars11/"
-isdir(output_dir) || mkdir(output_dir)
-
-fig.savefig(joinpath(output_dir, "losses.pdf"))
-
-Arrow.write(
-    joinpath(output_dir, "recorded_measures.arrow"),
+save_model(;
+    output_dir = "/work/sschaub/JuliaForHEP/lola+scalars12/",
+    fig,
     recorded_measures,
-)
-
-let ps = Flux.params(cpu(model)) |> collect
-    df = DataFrame()
-    if n_jets > 0
-        cola = popfirst!(ps)
-        @assert cola isa CoLa
-        lola = popfirst!(ps)
-        @assert lola isa LoLa
-        df = DataFrame(
-            :cola => [cola.C],
-            :lola_w_E => [lola.w_E],
-            (Symbol(:lola_w_d_, i) => [lola.w_ds[i]] for i in eachindex(lola.w_ds))...,
-        )
-    end
-    df = hcat(
-        df,
-        DataFrame(
-            (Symbol(i % Bool ? :W_ : :b_, fld1(i, 2)) => [p] for (i, p) in enumerate(ps))...,
-        )
-    )
-    Arrow.write(
-        joinpath(output_dir, "layer_params.arrow"),
-        df,
-    )
-end
-
-all_features = DataFrame();
-ŷ = softmax(model(gpu(inputs))) |> cpu
-lola_out = model[1](gpu(inputs))[1:length(Vars.names_lola_out), :] |> cpu
-for (label, idx) in [
-    :train => idx_train,
-    :test => idx_test,
-    :validation => idx_validation,
-]
-    idx = cpu(idx)
-    input_features = Symbol.(feature_names) .=> eachrow(view(inputs, :, idx))
-    #input_features_norm = Symbol.(Vars.variables["ge4j_ge3t"], :_norm) .=> eachrow(view(inputs, :, idx))
-    output_expected = :output_expected => outputs[idx]
-    output_predicted = [Symbol(:output_predicted_, l) => ŷ[i, idx] for (i, l) in enumerate(classes)]
-    _weights = [:weights => weights[idx], :weights_norm => total_weights[idx]]
-    kind = :kind => fill(label, length(idx))
-    _lola_out = Symbol.(Vars.names_lola_out) .=> eachrow(view(lola_out, :, idx))
-    append!(all_features, DataFrame(
-        input_features...,
-        output_expected,
-        output_predicted...,
-        _weights...,
-        _lola_out...,
-        kind,
-    ))
-end
-
-Arrow.write(
-    joinpath(output_dir, "all_features.arrow"),
-    all_features,
+    model,
+    inputs,
+    feature_names,
+    outputs,
+    weights,
+    total_weights,
+    idx_train, idx_test, idx_validation,
 )

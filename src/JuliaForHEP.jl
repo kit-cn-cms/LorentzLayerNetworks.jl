@@ -149,7 +149,11 @@ function ChainRulesCore.rrule(::typeof(reinterpret), ::typeof(reshape), ::Type{T
     return reinterpret(reshape, T, x), reinterpret_reshape_pullback
 end
 
-include("reinterpret_reshape.jl")
+#include("reinterpret_reshape.jl")
+
+#macro tullio(x...)
+#    return Tullio.var"@tullio"(__source__, __module__, :(verbose=2), x...)
+#end
 
 include("cola.jl")
 include("lola.jl")

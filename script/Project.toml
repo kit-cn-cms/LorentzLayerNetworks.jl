@@ -1,8 +1,10 @@
 [deps]
+Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
 Conda = "8f4d0f93-b110-5947-807f-2305c1781a2d"
+Cthulhu = "f68482b8-f384-11e8-15f7-abe071a5a75f"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 JuliaForHEP = "3434e64c-4745-457d-a55b-2ec3ff40c818"
