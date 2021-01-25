@@ -93,11 +93,13 @@ for scalar_features in [[String[]]; Base.vect.(Vars.scalar_features)]
 
     save_model(;
         output_dir = "/work/sschaub/JuliaForHEP/lola+$name/",
-        fig,
+        fig = nothing,
         recorded_measures,
         model,
         inputs,
         feature_names,
+        n_jets,
+        classes,
         outputs,
         weights,
         total_weights,

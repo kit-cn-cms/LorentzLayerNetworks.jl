@@ -7,6 +7,8 @@ function save_model(;
     model,
     inputs,
     feature_names,
+    n_jets,
+    classes,
     outputs,
     weights,
     total_weights,
@@ -14,7 +16,9 @@ function save_model(;
 )
     isdir(output_dir) || mkdir(output_dir)
 
-    fig.savefig(joinpath(output_dir, "losses.pdf"))
+    if fig !== nothing
+        fig.savefig(joinpath(output_dir, "losses.pdf"))
+    end
 
     Arrow.write(
         joinpath(output_dir, "recorded_measures.arrow"),
@@ -47,7 +51,6 @@ function save_model(;
     end
 
     all_features = DataFrame();
-    ŷ = softmax(model(gpu(inputs))) |> cpu
     if n_jets > 0
         lola_out = model[1](gpu(inputs))[1:length(Vars.names_lola_out), :] |> cpu
     end
@@ -59,7 +62,8 @@ function save_model(;
         idx = cpu(idx)
         input_features = Symbol.(feature_names) .=> eachrow(view(inputs, :, idx))
         output_expected = :output_expected => outputs[idx]
-        output_predicted = [Symbol(:output_predicted_, l) => ŷ[i, idx] for (i, l) in enumerate(classes)]
+        ŷ = softmax(model(gpu(inputs[:, idx]))) |> cpu
+        output_predicted = [Symbol(:output_predicted_, l) => ŷ[i, :] for (i, l) in enumerate(classes)]
         _weights = [:weights => weights[idx], :weights_norm => total_weights[idx]]
         _lola_out = if n_jets > 0
             Symbol.(Vars.names_lola_out) .=> eachrow(view(lola_out, :, idx))
