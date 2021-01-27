@@ -152,3 +152,28 @@ Arrow.write(
     joinpath(basedir, "roc_scores.arrow"),
     measures,
 )
+
+begin
+fig, ax = subplots(figsize=(11, 11))
+marker = (train=:v, test=:P, validation=:o)
+foreach(pairs(groupby(measures, [:kind, :node]))) do ((kind, node), df)
+    node === :ttH || return
+    x = axes(df, 1)
+    ax.scatter(
+        x, df.ROC_AUC;
+        color=[:red; fill(:blue, length(x)-3); :green; :orange], marker=marker[kind],
+        label=kind,
+    )
+end
+
+x = unique(measures.feature)
+ax.set_xticks(eachindex(x))
+ax.set_xticklabels(string.("\\verb|", x, "|"); rotation=90)
+ax.set_ylabel("AUC")
+ax.legend(; loc="upper left", fontsize=16, frameon=true)
+fig.suptitle("ttH ROC integrals for training with LoLa + X")
+annotate_cms(ax)
+fig.tight_layout()
+fig.savefig(joinpath(basedir, "roc_scores.pdf"))
+display(fig)
+end

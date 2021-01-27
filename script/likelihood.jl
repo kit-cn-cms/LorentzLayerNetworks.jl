@@ -20,15 +20,15 @@ for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars
     transform!(all_features,
         AsTable(r"output_predicted_.+") => ByRow(x -> Symbol(split(string(argmax(x)), '_')[end])) => :prediction,
     )
-    validation_split = .75 * .2
 
     for ((kind,), df) in pairs(groupby(all_features, :kind))
-        kind === :validation || continue
+        #kind === :validation || continue
+        split = (train=.75 * .8, test=.25, validation=.75 * .2)[kind]
 
         hists = DataFrame()
         for ((node, true_class), df) in pairs(groupby(df, [:prediction, :output_expected], sort=true))
             data = df[!, Symbol(:output_predicted_, node)]
-            weights = Weights(df.weights ./ validation_split)# .* (300 / 41.5))
+            weights = Weights(df.weights ./ split)# .* (300 / 41.5))
             bins = range(.25, 1; length=11)
             values = fit(Histogram, data, weights, bins).weights
             append!(hists, DataFrame(; bins=bins[1:end-1], values, node, true_class))
@@ -44,7 +44,7 @@ for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars
         λ(μ) = μ .* hists.signal .+ hists.bg
         NLL(μ) = -sum(logpdf.(Poisson.(λ(μ)), k))
         z1, z2 = find_zeros(μ -> 2(NLL(μ) - NLL(1)) - 1, 0, 2)
-        push!(measures, (; feature, σ_μ = (z2 - z1) / 2))
+        push!(measures, (; feature, kind, σ_μ = (z2 - z1) / 2))
 
         μ = range(.5, 1.5; length=100)
         t = 2 .* (NLL.(μ) .- NLL(1))
@@ -61,7 +61,7 @@ for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars
         ax.legend(["\$\\mu = 1^{+$(@sprintf "%.3f" z2-1)}_{-$(@sprintf "%.3f" 1-z1)}\$"]; loc="upper center")
         annotate_cms(ax)
         display(fig)
-        fig.savefig(joinpath(output_dir, "likelihood_ttH.pdf"))
+        fig.savefig(joinpath(output_dir, "likelihood_ttH_$kind.pdf"))
 
         fig1, axs1 = subplots(ncols=2, nrows=2, figsize=(15, 12))
         foreach(
@@ -81,21 +81,36 @@ for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars
         fig1.suptitle("Binning \\verb|$feature|")
         fig1.tight_layout()
         display(fig1)
-        fig1.savefig(joinpath(output_dir, "binning_ttH.pdf"))
+        fig1.savefig(joinpath(output_dir, "binning_ttH_$kind.pdf"))
     end
 end
 
 #replace!(measures.feature, "lola+scalars11" => "lola+all scalars", "scalars2" => "only scalars")
+Arrow.write(
+    joinpath(basedir, "stddevs_mu.arrow"),
+    measures,
+)
 
+begin
 fig, ax = subplots(figsize=(11, 11))
-x = axes(measures, 1)
-ax.scatter(x, measures.σ_μ, color=[:red; fill(:blue, length(x)-3); :green; :orange])
+marker = (train=:v, test=:P, validation=:o)
+foreach(pairs(groupby(measures, :kind))) do ((kind,), df)
+    x = axes(df, 1)
+    ax.scatter(
+        x, df.σ_μ;
+        color=[:red; fill(:blue, length(x)-3); :green; :orange], marker=marker[kind],
+        label=kind,
+    )
+end
 
-ax.set_xticks(x)
-ax.set_xticklabels(string.("\\verb|", measures.feature, "|"); rotation=90)
+x = unique(measures.feature)
+ax.set_xticks(eachindex(x))
+ax.set_xticklabels(string.("\\verb|", x, "|"); rotation=90)
+ax.legend(; loc="upper right", fontsize=16, frameon=true)
 ax.set_ylabel(L"\sigma_\mu")
 fig.suptitle("Standard Deviations of \$\\mu\$ for training with LoLa + X")
 annotate_cms(ax)
 fig.tight_layout()
-fig.savefig(joinpath(basedir, "lola+x.pdf"))
+fig.savefig(joinpath(basedir, "stddevs_mu.pdf"))
 display(fig)
+end
