@@ -11,13 +11,15 @@ using .Vars: classes
 _reshape(a, dims...) = invoke(Base._reshape, Tuple{AbstractArray, Base.Dims}, a, Base._reshape_uncolon(a, dims))
 
 measures = DataFrame()
-basedir = "/work/sschaub/JuliaForHEP/feature_evaluation_0125/"
+basedir = "/work/sschaub/JuliaForHEP/feature_evaluation2_0131/"
 
 #for feature in ["lola+none"]
-for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars2"]
-    @show feature
+#for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars2"]
+for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(basedir, x)), readdir(basedir))
     output_dir = joinpath(basedir, "$feature/")
-    feature = replace!([feature], "lola+scalars11" => "lola+all scalars", "scalars2" => "only scalars")[]
+    feature = replace(feature, Regex("_$i\$") => "")
+    @show feature, i
+    #feature = replace!([feature], "lola+scalars11" => "lola+all scalars", "scalars2" => "only scalars")[]
 
     layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
     all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
@@ -100,7 +102,7 @@ for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars
             ax_roc.set_title("$class")
             annotate_cms(ax_roc)
 
-            push!(measures, (; feature, kind, ROC_AUC=auc, node=class))
+            push!(measures, (; feature, kind, ROC_AUC=auc, node=class, i))
         end
         fig_eff.suptitle("Efficiencies - $kind")
         fig_eff.tight_layout()
@@ -158,10 +160,11 @@ fig, ax = subplots(figsize=(11, 11))
 marker = (train=:v, test=:P, validation=:o)
 foreach(pairs(groupby(measures, [:kind, :node]))) do ((kind, node), df)
     node === :ttH || return
+    df = combine(groupby(df, :i), :ROC_AUC .=> (mean, std))
     x = axes(df, 1)
-    ax.scatter(
-        x, df.ROC_AUC;
-        color=[:red; fill(:blue, length(x)-3); :green; :orange], marker=marker[kind],
+    ax.errorbar(
+        x, df.ROC_AUC_mean; yerror=df.ROC_AUC_std,
+        color=:blue#=[:red; fill(:blue, length(x)-3); :green; :orange]=#, marker=marker[kind],
         label=kind,
     )
 end
@@ -170,7 +173,7 @@ x = unique(measures.feature)
 ax.set_xticks(eachindex(x))
 ax.set_xticklabels(string.("\\verb|", x, "|"); rotation=90)
 ax.set_ylabel("AUC")
-ax.legend(; loc="upper left", fontsize=16, frameon=true)
+ax.legend(; #=loc="upper left", =#fontsize=16, frameon=true)
 fig.suptitle("ttH ROC integrals for training with LoLa + X")
 annotate_cms(ax)
 fig.tight_layout()

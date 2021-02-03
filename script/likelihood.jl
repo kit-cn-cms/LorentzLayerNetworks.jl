@@ -9,12 +9,14 @@ include("plot_styles.jl")
 using .Vars: classes
 
 measures = DataFrame()
-basedir = "/work/sschaub/JuliaForHEP/feature_evaluation_0125/"
+basedir = "/work/sschaub/JuliaForHEP/feature_evaluation2_0131/"
 
-for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars2"]
-    @show feature
+#for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars2"]
+for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(basedir, x)), readdir(basedir))
     output_dir = joinpath(basedir, "$feature/")
-    feature = replace!([feature], "lola+scalars11" => "lola+all scalars", "scalars2" => "only scalars")[]
+    feature = replace(feature, Regex("_$i\$") => "")
+    @show feature, i
+    #feature = replace!([feature], "lola+scalars11" => "lola+all scalars", "scalars2" => "only scalars")[]
 
     all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
     transform!(all_features,
@@ -31,7 +33,7 @@ for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars
             weights = Weights(df.weights ./ split)# .* (300 / 41.5))
             bins = range(.25, 1; length=11)
             values = fit(Histogram, data, weights, bins).weights
-            append!(hists, DataFrame(; bins=bins[1:end-1], values, node, true_class))
+            append!(hists, DataFrame(; bins=bins[1:end-1], values, node, true_class, i))
         end
         @show combine(groupby(hists, [:true_class, :node]), :values => sum)
         hists = groupby(hists, [:bins, :node])
@@ -95,10 +97,11 @@ begin
 fig, ax = subplots(figsize=(11, 11))
 marker = (train=:v, test=:P, validation=:o)
 foreach(pairs(groupby(measures, :kind))) do ((kind,), df)
+    df = combine(groupby(df, :i), :σ_μ .=> (mean, std))
     x = axes(df, 1)
-    ax.scatter(
-        x, df.σ_μ;
-        color=[:red; fill(:blue, length(x)-3); :green; :orange], marker=marker[kind],
+    ax.errorbar(
+        x, df.σ_μ_mean; yerror=df.σ_μ_std,
+        color=:blue#=[:red; fill(:blue, length(x)-3); :green; :orange]=#, marker=marker[kind],
         label=kind,
     )
 end

@@ -19,9 +19,21 @@ include("save_model.jl")
 basedir = "/local/scratch/ssd/sschaub/h5files/ttH_sebastian-processed/"
 h5files = joinpath.(basedir, ["ttH", "ttbb", "ttcc", "ttlf"] .* "_lola.h5")
 
-for scalar_features in [[String[]]; Base.vect.(Vars.scalar_features)]
-    @show scalar_features
-    feature_names = [Vars.jets; Vars.tight_lepton; Vars.jet_csv; scalar_features]
+for i in 1:10
+
+for (scalar_features, include_jets) in zip([
+    [String[]]; #=Base.vect.(Vars.scalar_features); =#
+    [Vars.tier3, [Vars.tier2; Vars.tier3], Vars.scalar_features];
+    [Vars.scalar_features, Vars.scalar_features]
+],
+    [fill(:lola, 4); :jets_as_scalars; :none]
+)
+    @show scalar_features, include_jets
+    feature_names = if include_jets === :none
+        scalar_features
+    else
+        [Vars.jets; Vars.tight_lepton; Vars.jet_csv; scalar_features]
+    end
     inputs = extract_cols(h5files, feature_names) .|> Float32
 
     classes = Vars.classes
@@ -41,8 +53,8 @@ for scalar_features in [[String[]]; Base.vect.(Vars.scalar_features)]
     ds_validation = DataLoader(ds_validation; batchsize=1024, shuffle=false)
     ds_test = DataLoader(ds_test; batchsize=1024, shuffle=false)
 
-    m = 15
-    n_jets = length([Vars.jets; Vars.tight_lepton]) ÷ 4
+    m = include_jets === :lola ? 15 : 0
+    n_jets = include_jets === :lola ? length([Vars.jets; Vars.tight_lepton]) ÷ 4 : 0
     n_inputs = size(inputs, 1)
     n_outputs = length(classes)
     model = build_model(;
@@ -62,25 +74,29 @@ for scalar_features in [[String[]]; Base.vect.(Vars.scalar_features)]
 
     recorded_measures = DataFrame()
 
-    # pretrain Lo+CoLa
-    n_outputs_lola = (n_jets + m) * (3 + 4) + length(Vars.jet_csv)
-    _model = Chain(
-        model[1:end-1]...,
-        #x -> view(x, 1:n_outputs_lola, :),
-        x -> x[1:n_outputs_lola, :],
-        build_dnn(;
-            n_inputs = n_outputs_lola,
-            neurons = [1024, 2048, 512, 512],
-            n_outputs,
-            activation = _leakyrelu,
-            dropout = Dropout(0.5),
-        ) |> gpu,
-    )
-    train!(;
-        model=_model, ds_train, ds_test, ds_validation,
-        loss, optimizer, measures, recorded_measures,
-        max_epochs=20, min_epochs=50, early_stopping_n=10, early_stopping_percentage=2,
-    )
+    if include_jets === :lola
+        # pretrain Lo+CoLa
+        n_outputs_lola = (n_jets + m) * (3 + 4) + length(Vars.jet_csv)
+        _model = Chain(
+            model[1:end-1]...,
+            #x -> view(x, 1:n_outputs_lola, :),
+            x -> x[1:n_outputs_lola, :],
+            build_dnn(;
+                n_inputs = n_outputs_lola,
+                neurons = [1024, 2048, 512, 512],
+                n_outputs,
+                activation = _leakyrelu,
+                dropout = Dropout(0.5),
+            ) |> gpu,
+        )
+        train!(;
+            model=_model, ds_train, ds_test, ds_validation,
+            loss, optimizer, measures, recorded_measures,
+            max_epochs=20, min_epochs=50, early_stopping_n=10, early_stopping_percentage=2,
+        )
+    else
+        model = model[2:end]
+    end
 
     # main training
     train!(;
@@ -89,10 +105,20 @@ for scalar_features in [[String[]]; Base.vect.(Vars.scalar_features)]
         max_epochs=120, min_epochs=50, early_stopping_n=7, early_stopping_percentage=2,
     )
 
-    name = isempty(scalar_features) ? "none" : scalar_features[]
+    name = string(include_jets) * "+" * if isempty(scalar_features)
+        "none"
+    elseif length(scalar_features) == 1
+        scalar_features[]
+    elseif scalar_features == Vars.tier3
+        "tier3"
+    elseif scalar_features == [Vars.tier2; Vars.tier3]
+        "tier2+3"
+    elseif scalar_features == Vars.scalar_features
+        "all"
+    end
 
     save_model(;
-        output_dir = "/work/sschaub/JuliaForHEP/lola+$name/",
+        output_dir = "/work/sschaub/JuliaForHEP/feature_evaluation2_0131/$(name)_$i/",
         fig = nothing,
         recorded_measures,
         model,
@@ -105,4 +131,6 @@ for scalar_features in [[String[]]; Base.vect.(Vars.scalar_features)]
         total_weights,
         idx_train, idx_test, idx_validation,
     )
+end
+
 end

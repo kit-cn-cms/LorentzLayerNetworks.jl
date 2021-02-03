@@ -17,18 +17,18 @@ function train!(;
             merge(prefix_labels.((train, test, validation), (:train_, :test_, :validation_))...),
         )
 
-        #let
-        #    global fig, ax = subplots()
-        #    losses = ["train_loss", "test_loss", "validation_loss"]
-        #    plts = foreach(1:3, losses) do i, loss
-        #        ax.plot(
-        #            getproperty(recorded_measures, loss),
-        #            label=replace(loss, '_' => ' '),
-        #        )
-        #    end
-        #    ax.legend()
-        #    display(fig)
-        #end
+        let
+            global fig, ax = subplots()
+            losses = ["train_loss", "test_loss", "validation_loss"]
+            plts = foreach(1:3, losses) do i, loss
+                ax.plot(
+                    getproperty(recorded_measures, loss),
+                    label=replace(loss, '_' => ' '),
+                )
+            end
+            ax.legend()
+            display(fig)
+        end
 
         if i >= min_epochs
             if argmin(recorded_measures[!, :test_loss]) <= i - early_stopping_n
