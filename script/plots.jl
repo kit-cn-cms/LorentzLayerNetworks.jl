@@ -12,6 +12,7 @@ _reshape(a, dims...) = invoke(Base._reshape, Tuple{AbstractArray, Base.Dims}, a,
 
 measures = DataFrame()
 basedir = "/work/sschaub/JuliaForHEP/feature_evaluation2_0131/"
+tex = false
 
 #for feature in ["lola+none"]
 #for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars2"]
@@ -117,7 +118,7 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
         _features = filter(in(names(df)), _features)
         n = length(_features)
         vars = df[!, _features]
-        _features = string.("\\verb|", _features, "|")
+        tex && (_features = string.("\\verb|", _features, "|"))
 
         correlations = [cor(u, v) for u in eachcol(vars), v in eachcol(vars)]
         fig, ax = subplots(figsize=(14, 12.5))
@@ -156,15 +157,19 @@ Arrow.write(
 )
 
 begin
+idx = sortperm(measures.feature; by=x -> findfirst(==(x), ["lola+" .* ["none", "tier3", "tier2+3", "all"]; "jets_as_scalars+all"; "none+all"]))
+measures = measures[idx, :]
 fig, ax = subplots(figsize=(11, 11))
 marker = (train=:v, test=:P, validation=:o)
 foreach(pairs(groupby(measures, [:kind, :node]))) do ((kind, node), df)
     node === :ttH || return
-    df = combine(groupby(df, :i), :ROC_AUC .=> (mean, std))
+    kind === :validation || return
+    df = combine(groupby(df, :feature), (:ROC_AUC .=> (mean, std))...)
     x = axes(df, 1)
     ax.errorbar(
-        x, df.ROC_AUC_mean; yerror=df.ROC_AUC_std,
+        x, df.ROC_AUC_mean; yerr=df.ROC_AUC_std,
         color=:blue#=[:red; fill(:blue, length(x)-3); :green; :orange]=#, marker=marker[kind],
+        lw=0, elinewidth=1, capsize=8, markersize=8,
         label=kind,
     )
 end

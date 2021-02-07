@@ -12,6 +12,7 @@ using PyCall, PyPlot
 hep.set_style(hep.style.CMS)
 hep.set_style(Dict("font.sans-serif" => "DejaVu Sans"))
 matplotlib.rc("text", usetex=true)
+#matplotlib.rc("text", usetex=false)
 
 function annotate_cms(ax)
     hep.cms.text("Private Work"; fontsize=20, ax)
