@@ -44,4 +44,24 @@ names_lola_out = [
     ["Lepton_m²"; "Lepton_p_T"; "Lepton_weighted_E"; string.("Lepton_weighted_d", 1:4)]
 ]
 
+tier1 = [
+    "Evt_CSV_avg_tagged",
+    "Evt_CSV_avg",
+    "Evt_M_minDrLepTag",
+    "Evt_Pt_JetsAverage",
+    "Evt_Pt_minDrTaggedJets",
+    "Evt_Deta_TaggedJetsAverage",
+]
+tier2 = [
+    "Evt_Deta_JetsAverage",
+]
+tier3 = [
+    "Reco_JABDT_ttbar_Jet_CSV_whaddau2",
+    "Reco_ttbar_toplep_m",
+    "Reco_tHq_bestJABDToutput",
+    "Reco_JABDT_tHq_abs_ljet_eta",
+    "Reco_JABDT_tHq_Jet_CSV_hdau1",
+    "Reco_JABDT_tHW_Jet_CSV_btop",
+]
+
 end
