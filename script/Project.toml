@@ -1,5 +1,4 @@
 [deps]
-Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
@@ -12,6 +11,7 @@ JuliaForHEP = "3434e64c-4745-457d-a55b-2ec3ff40c818"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
+ProfileVega = "4391764f-db79-4bd7-a4c6-f9062de4300e"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"

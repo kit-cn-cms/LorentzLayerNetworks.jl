@@ -11,7 +11,7 @@ using .Vars: classes
 _reshape(a, dims...) = invoke(Base._reshape, Tuple{AbstractArray, Base.Dims}, a, Base._reshape_uncolon(a, dims))
 
 measures = DataFrame()
-basedir = "/work/sschaub/JuliaForHEP/feature_evaluation2_0131/"
+basedir = "/work/sschaub/JuliaForHEP/feature_evaluation_test/"
 tex = false
 
 #for feature in ["lola+none"]

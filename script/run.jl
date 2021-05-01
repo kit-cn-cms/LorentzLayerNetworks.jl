@@ -68,7 +68,7 @@ for (scalar_features, include_jets) in zip([
     optimizer = ADAM(5e-5)
 
     penalty = l2_penalty(model)
-    loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights)) + 1f-5 * penalty()
+    loss(ŷ, y; weights) = Flux.logitcrossentropy(ŷ, y; agg = x -> weighted_mean(x, weights))# + 1f-5 * penalty()
 
     measures = (; loss=st->st.loss, accuracy=st->accuracy(softmax(st.ŷ), st.y))
 
@@ -118,7 +118,7 @@ for (scalar_features, include_jets) in zip([
     end
 
     save_model(;
-        output_dir = "/work/sschaub/JuliaForHEP/feature_evaluation2_0131/$(name)_$i/",
+        output_dir = "/work/sschaub/JuliaForHEP/feature_evaluation_0208/$(name)_$i/",
         fig = nothing,
         recorded_measures,
         model,

@@ -3,13 +3,14 @@ using Statistics, Distributions, StatsBase
 using Roots
 using PyPlot, Printf, PyCall
 
+using LinearAlgebra
 
 include("variables.jl")
 include("plot_styles.jl")
 using .Vars: classes
 
 measures = DataFrame()
-basedir = "/work/sschaub/JuliaForHEP/feature_evaluation2_0131/"
+basedir = "/work/sschaub/JuliaForHEP/feature_evaluation_test/"
 tex = false
 
 #for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars2"]
@@ -40,7 +41,8 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
         hists = groupby(hists, [:bins, :node])
         hists = combine(hists) do x
             sig = x.true_class .=== :ttH
-            (signal=round(Int, sum(x[sig, :values])), bg=round(Int, sum(x[Not(sig), :values])))
+            (signal=round(Int, sum(x[sig, :values])), bg=round(Int, sum(x[Not(sig), :values])),
+             _signal=sum(x[sig, :values]), _bg=sum(x[Not(sig), :values]))
         end
         #filter!([:signal, :bg] => (s, b) -> s + b > 0, hists)
         k = hists.signal .+ hists.bg
@@ -49,11 +51,17 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
         z1, z2 = find_zeros(μ -> 2(NLL(μ) - NLL(1)) - 1, 0, 2)
         push!(measures, (; feature, kind, σ_μ = (z2 - z1) / 2, i))
 
+        _k = hists._signal .+ hists._bg
+        _λ(μ) = μ .* hists._signal .+ hists._bg
+        _NLL(μ) = -sum(logpdf.(Gamma.(_λ(μ) .+ 1, 1), _k))
+
         μ = range(.5, 1.5; length=100)
         t = 2 .* (NLL.(μ) .- NLL(1))
+        _t = 2 .* (_NLL.(μ) .- _NLL(1))
 
         fig, ax = subplots()
         ax.plot(μ, t)
+        ax.plot(μ, _t)
         ax.axhline(1; color=:grey, ls="--", lw=1)
         ax.axvline.([z1, z2]; color=:grey, ls="--", lw=1)
         fig.suptitle("Likelihood Fit ttH")
