@@ -4,8 +4,6 @@ using PyPlot
 include("plot_styles.jl")
 
 basedir = "/work/sschaub/JuliaForHEP/final_plotting/"
-tex = true
-
 output_dir = joinpath(basedir, "lola+all_1")
 recorded_measures = DataFrame(Arrow.Table(joinpath(output_dir, "recorded_measures.arrow")))
 
