@@ -17,6 +17,6 @@ matplotlib.rc("text", usetex=true)
 function annotate_cms(ax)
     hep.cms.text("Private Work"; fontsize=20, ax)
     hep.cms.lumitext(L"41.5 $\mathrm{fb^{-1}}$"; fontsize=16, ax)
-    ax.text(.05, .05, "1 Lepton, 6 Jets, \\textgreater= 3 Btags";
+    ax.text(.05, .05, L"1 Lepton, 6 Jets, $\ge$3 Btags";
         transform=ax.transAxes, fontsize=16)
 end

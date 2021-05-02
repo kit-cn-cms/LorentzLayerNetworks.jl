@@ -17,8 +17,9 @@ for (ax, feature) in zip(permutedims(reshape(axs, 4, 4)), Vars.scalar_features)
     ax.hist([i[!, feature] for i in df],
         weights=[i.weights for i in df],
         bins=30, stacked=true, label=first.(keys(df)))
-    ax.set_title("\\verb|$feature|")
+    ax.set_title("\\verb|$feature|\n")
     ax.legend()
+    annotate_cms(ax)
 end
 
 fig.suptitle("Distributions of Scalar Features")
