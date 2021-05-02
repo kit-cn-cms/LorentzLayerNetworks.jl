@@ -8,19 +8,14 @@ include("variables.jl")
 include("plot_styles.jl")
 using .Vars: classes
 
-_reshape(a, dims...) = invoke(Base._reshape, Tuple{AbstractArray, Base.Dims}, a, Base._reshape_uncolon(a, dims))
-
 measures = DataFrame()
-basedir = "/work/sschaub/JuliaForHEP/feature_evaluation2_0131/"
-tex = false
+basedir = "/work/sschaub/JuliaForHEP/final_plotting/"
+tex = true
 
-#for feature in ["lola+none"]
-#for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars2"]
 for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(basedir, x)), readdir(basedir))
     output_dir = joinpath(basedir, "$feature/")
     feature = replace(feature, Regex("_$i\$") => "")
     @show feature, i
-    #feature = replace!([feature], "lola+scalars11" => "lola+all scalars", "scalars2" => "only scalars")[]
 
     layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
     all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
@@ -47,8 +42,8 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
         outputs_onehot = Flux.onehotbatch(df.output_expected, classes)
 
         confusion_mat = sum(
-            _reshape(Flux.onehotbatch(Flux.onecold(ŷ, classes), classes), 1, 4, :) .===
-                _reshape(outputs_onehot, 4, 1, :);
+            reshape(Flux.onehotbatch(Flux.onecold(ŷ, classes), classes), 1, 4, :) .===
+                reshape(outputs_onehot, 4, 1, :);
             dims=3,
         )
         confusion_mat = confusion_mat ./ sum(confusion_mat; dims=2)
@@ -98,7 +93,7 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
             ax_roc.text(.2, .2, @sprintf("AUC = %.3f", auc); fontsize=24)
             ax_roc.set_xlim(0, 1)
             ax_roc.set_ylim(0, 1)
-            ax_roc.set_ylabel("1 - background efficiency")
+            ax_roc.set_ylabel("background rejection")
             ax_roc.set_xlabel("signal efficiency")
             ax_roc.set_title("$class")
             annotate_cms(ax_roc)

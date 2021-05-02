@@ -9,15 +9,13 @@ include("plot_styles.jl")
 using .Vars: classes
 
 measures = DataFrame()
-basedir = "/work/sschaub/JuliaForHEP/feature_evaluation2_0131/"
-tex = false
+basedir = "/work/sschaub/JuliaForHEP/final_plotting/"
+tex = true
 
-#for feature in ["lola+" .* ["none"; Vars.scalar_features; "scalars11"]; "scalars2"]
 for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(basedir, x)), readdir(basedir))
     output_dir = joinpath(basedir, "$feature/")
     feature = replace(feature, Regex("_$i\$") => "")
     @show feature, i
-    #feature = replace!([feature], "lola+scalars11" => "lola+all scalars", "scalars2" => "only scalars")[]
 
     all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
     transform!(all_features,
