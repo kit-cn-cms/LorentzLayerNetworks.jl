@@ -13,5 +13,6 @@ ax.set_title("Loss Values")
 ax.set_xlabel("Epoch")
 ax.set_ylabel("Loss")
 ax.legend(["Training Loss", "Testing Loss", "Validation Loss"])
+annotate_cms(ax)
 
 fig.savefig(joinpath(output_dir, "losses.pdf"))
