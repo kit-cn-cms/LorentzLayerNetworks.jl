@@ -10,20 +10,31 @@ basedir = "/work/sschaub/JuliaForHEP/final_plotting/"
 output_dir = joinpath(basedir, "lola+all_1")
 all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
 
-fig, axs = subplots(4, 4, figsize=(30, 30))
+fig1, axs1 = subplots(4, 2, figsize=(18, 30))
+fig2, axs2 = subplots(3, 2, figsize=(18, 22.5))
 df = groupby(all_features, :output_expected; sort=true)
-for (ax, feature) in zip(permutedims(axs), Vars.scalar_features)
+for (ax, feature) in zip(permutedims([axs1; axs2]), Vars.scalar_features)
     ax.hist([i[!, feature] for i in df],
         weights=[i.weights for i in df],
         bins=30, stacked=true, label=first.(keys(df)))
-    ax.set_title("\\verb|$feature|\n")
-    ax.legend()
-    annotate_cms(ax)
+    unit = any(occursin(feature), ["Evt_M", "Evt_Pt", "toplep_m"]) ? " in GeV" : ""
+    ax.set_xlabel("\\verb|$feature|$unit")
+    ax.set_ylabel("Events/bin")
+
+    leg = ax.legend()
+    if feature in Vars.scalar_features[[end-3; end-1:end]]
+        annotate_cms(ax; sel_pos=(.25, .95))
+    else
+        annotate_cms(ax; sel_pos=(.05, .95))
+    end
 end
-fig.suptitle("Distributions of Scalar Features")
-fig.tight_layout()
-display(fig)
-fig.savefig(joinpath(output_dir, "scalar_features.pdf"))
+axs2[end].axis(:off)
+for (i, fig) in enumerate([fig1, fig2])
+    fig.suptitle("Distributions of Scalar Features ($i)")
+    fig.tight_layout()
+    display(fig)
+    fig.savefig(joinpath(output_dir, "scalar_features_$i.pdf"))
+end
 
 _all_features = let
     basedir = "/local/scratch/ssd/sschaub/h5files/ttH_sebastian-processed/"
@@ -33,6 +44,7 @@ _all_features = let
             ["Jet_Pt[$i]", "Jet_Eta[$i]", "Jet_Phi[$i]", "Jet_M[$i]"]
         end
         "TightLepton_" .* ["Pt", "Eta", "Phi", "M"] .* "[0]"
+        "Weight_XS"
     ]
     df = DataFrame(extract_cols(h5files, names)', names)
     [df all_features]
@@ -66,7 +78,9 @@ for (ax, feature, (lo, hi), unit) in zip([axs[1:2, :][1:3]; axs[3:4, :][:]], Var
     ax.hist([i[!, feature] for i in df],
         weights=[i.weights for i in df],
         bins=range(lo, hi; length=30), stacked=true, label=first.(keys(df)))
-    ax.set_xlabel("\\verb|$feature| in $unit")
+    feature = replace(feature, r"Jet_(.*)\[([0-5])\]" => s"\\verb|\1| of Jet \2")
+    feature = replace(feature, r"Lepton_(.*)" => s"\\verb|\1| of the Lepton")
+    ax.set_xlabel("$feature in $unit")
     ax.set_ylabel("Events/bin")
 
     ax.legend()
