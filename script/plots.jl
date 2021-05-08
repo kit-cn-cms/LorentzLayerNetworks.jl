@@ -11,6 +11,7 @@ using .Vars: classes
 measures = DataFrame()
 basedir = "/work/sschaub/JuliaForHEP/final_plotting/"
 tex = true
+Base.uppercasefirst(s::Symbol) = Symbol(uppercasefirst(String(s)))
 
 for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(basedir, x)), readdir(basedir))
     output_dir = joinpath(basedir, "$feature/")
@@ -20,7 +21,7 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
     layer_params = DataFrame(Arrow.Table(joinpath(output_dir, "layer_params.arrow")))
     all_features = DataFrame(Arrow.Table(joinpath(output_dir, "all_features.arrow")))
 
-    fig1, axs1 = subplots(ncols=2, nrows=2, figsize=(16, 12))
+    fig1, axs1 = subplots(ncols=2, nrows=2, figsize=(16, 14))
     linestyles = (train = "-", test = "--", validation="-.")
     for ((kind,), df) in pairs(groupby(all_features, :kind))
         kind !== :test && foreach(
@@ -30,8 +31,8 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
             foreach(axs1, classes) do ax1, class_predicted
                 ax1.hist(
                     df[!, Symbol(:output_predicted_, class_predicted)];
-                    label="true $class ($kind)", density=true,
-                    bins=30, histtype=:step, color, ls=linestyles[kind],
+                    label="True $class ($(uppercasefirst(kind)))", density=true,
+                    bins=range(0, 1; length=31), histtype=:step, color, ls=linestyles[kind],
                 )
             end
         end
@@ -52,37 +53,40 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
 
         img = ax.imshow(confusion_mat)
         for i in axes(confusion_mat, 1), j in axes(confusion_mat, 2)
-            ax.text(j-1, i-1, @sprintf("%.3g", confusion_mat[i, j]), ha=:center, va=:center)
+            txt = ax.text(j-1, i-1, @sprintf("%.3f", confusion_mat[i, j]); ha=:center, va=:center, color=:w)
+            txt.set_path_effects([path_effects.withStroke(linewidth=1, foreground=:black)])
+            #txt.set_path_effects([path_effects.withSimplePatchShadow(.8 .* (1, -1), :w, .8)])
         end
-        ax.set_xlabel("predicted output")
+        ax.set_xlabel("Predicted Output")
         ax.set_xticks(eachindex(classes).-1)
         ax.set_xticklabels(classes)
-        ax.set_ylabel("true output")
+        ax.set_ylabel("True Output")
         ax.set_yticks(eachindex(classes).-1)
         ax.set_yticklabels(classes)
-        annotate_cms(ax)
+        txt = annotate_cms(ax; color=:w)
+        txt.set_path_effects([path_effects.withStroke(linewidth=1, foreground=:black)])
         fig.colorbar(img)
-        fig.suptitle(kind)
+        fig.suptitle("Confusion Matrix - $(uppercasefirst(kind))")
         fig.savefig(joinpath(output_dir, "confusion_matrix_$kind.pdf"))
 
-        fig_eff, axs_eff = subplots(ncols=2, nrows=2, figsize=(16, 12))
-        fig_roc, axs_roc = subplots(ncols=2, nrows=2, figsize=(16, 12))
+        fig_eff, axs_eff = subplots(ncols=2, nrows=2, figsize=(16, 14))
+        fig_roc, axs_roc = subplots(ncols=2, nrows=2, figsize=(16, 14))
         for (ax_roc, ax_eff, class) in zip(axs_roc, axs_eff, classes)
             predictions_positives = df[df.output_expected .=== class, Symbol(:output_predicted_, class)]
             predictions_background = df[df.output_expected .!== class, Symbol(:output_predicted_, class)]
             eff_s, = ax_eff.hist(
                 predictions_positives;
                 cumulative=true, bins=range(0, 1; length=30), density=true, histtype=:step,
-                label="signal efficiency"
+                label="Signal Efficiency"
             )
             eff_bg, = ax_eff.hist(
                 predictions_background;
                 cumulative=true, bins=range(0, 1; length=30), density=true, histtype=:step,
-                label="background efficiency",
+                label="Background Efficiency",
             )
             ax_eff.legend(; loc="lower right")
-            ax_eff.set_ylabel("efficiency")
-            ax_eff.set_xlabel("1 - specificity")
+            ax_eff.set_ylabel("Efficiency")
+            ax_eff.set_xlabel("1 - Specificity")
             ax_eff.set_title("$class")
             annotate_cms(ax_eff)
 
@@ -93,18 +97,18 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
             ax_roc.text(.2, .2, @sprintf("AUC = %.3f", auc); fontsize=24)
             ax_roc.set_xlim(0, 1)
             ax_roc.set_ylim(0, 1)
-            ax_roc.set_ylabel("background rejection")
-            ax_roc.set_xlabel("signal efficiency")
+            ax_roc.set_ylabel("Background Rejection")
+            ax_roc.set_xlabel("Signal Efficiency")
             ax_roc.set_title("$class")
             annotate_cms(ax_roc)
 
             push!(measures, (; feature, kind, ROC_AUC=auc, node=class, i))
         end
-        fig_eff.suptitle("Efficiencies - $kind")
+        fig_eff.suptitle("Efficiencies - $(uppercasefirst(kind))")
         fig_eff.tight_layout()
         fig_eff.savefig(joinpath(output_dir, "efficiencies_$kind.pdf"))
 
-        fig_roc.suptitle("ROC curves - $kind")
+        fig_roc.suptitle("ROC Curves - $(uppercasefirst(kind))")
         fig_roc.tight_layout()
         fig_roc.savefig(joinpath(output_dir, "roc_curves_$kind.pdf"))
 
@@ -130,16 +134,17 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
             ax.vlines(i - .5, -.5, n - .5; color=:red, opts...)
             ax.hlines(i - .5, -.5, n - .5; color=:red, opts...)
         end
-        fig.suptitle("Correlations - $kind")
+        fig.suptitle("Correlations - $(uppercasefirst(kind))")
         fig.tight_layout()
         fig.savefig(joinpath(output_dir, "correlations_$kind.pdf"))
     end
 
     foreach(axs1, classes) do ax1, class_predicted
         ax1.set_title(String(class_predicted))
-        ax1.set_xlabel("p($class_predicted)")
+        ax1.set_xlabel("P($class_predicted)")
+        ax1.set_ylabel("Frequency Density")
         ax1.legend(; fontsize=16)
-        annotate_cms(ax1)
+        annotate_cms(ax1; sel_pos=(.2, .93))
     end
     #fig1.suptitle("Predicted Hbb")
     fig1.tight_layout()
@@ -174,7 +179,7 @@ ax.set_xticks(eachindex(x))
 ax.set_xticklabels(string.("\\verb|", x, "|"); rotation=90)
 ax.set_ylabel("AUC")
 ax.legend(; #=loc="upper left", =#fontsize=16, frameon=true)
-fig.suptitle("ttH ROC integrals for training with LoLa + X")
+fig.suptitle("ttH ROC Integrals for Training with LoLa + X")
 annotate_cms(ax)
 fig.tight_layout()
 fig.savefig(joinpath(basedir, "roc_scores.pdf"))

@@ -19,7 +19,7 @@ for (ax, feature) in zip(permutedims([axs1; axs2]), Vars.scalar_features)
         bins=30, stacked=true, label=first.(keys(df)))
     unit = any(occursin(feature), ["Evt_M", "Evt_Pt", "toplep_m"]) ? " in GeV" : ""
     ax.set_xlabel("\\verb|$feature|$unit")
-    ax.set_ylabel("Events/bin")
+    ax.set_ylabel("Events/Bin")
 
     leg = ax.legend()
     if feature in Vars.scalar_features[[end-3; end-1:end]]
@@ -59,7 +59,7 @@ for (ax, feature, unit) in zip(axs, [r"_Pt\[", r"_Eta\[", r"_Phi\[", r"_M\["],
         weights=[i.weights for i in _df],
         bins=30, stacked=true, label=first.(keys(_df)))
     ax.set_xlabel("\\verb|$(feature.pattern[2:end-2])|$unit")
-    ax.set_ylabel("Events/bin")
+    ax.set_ylabel("Events/Bin")
 
     ax.legend()
     annotate_cms(ax; sel_pos=(.05, .95))
@@ -77,11 +77,11 @@ for (ax, feature, (lo, hi), unit) in zip([axs[1:2, :][1:3]; axs[3:4, :][:]], Var
                                 ["GeV\$^2\$"; "GeV"; "GeV"; fill("GeV", 4)])
     ax.hist([i[!, feature] for i in df],
         weights=[i.weights for i in df],
-        bins=range(lo, hi; length=30), stacked=true, label=first.(keys(df)))
+        bins=range(lo, hi; length=31), stacked=true, label=first.(keys(df)))
     feature = replace(feature, r"Jet_(.*)\[([0-5])\]" => s"\\verb|\1| of Jet \2")
     feature = replace(feature, r"Lepton_(.*)" => s"\\verb|\1| of the Lepton")
     ax.set_xlabel("$feature in $unit")
-    ax.set_ylabel("Events/bin")
+    ax.set_ylabel("Events/Bin")
 
     ax.legend()
     annotate_cms(ax; sel_pos=(.05, .95))

@@ -64,19 +64,21 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
         display(fig)
         fig.savefig(joinpath(output_dir, "likelihood_ttH_$(kind)_15bins.pdf"))
 
-        fig1, axs1 = subplots(ncols=2, nrows=2, figsize=(15, 12))
+        fig1, axs1 = subplots(ncols=2, nrows=2, figsize=(16, 14))
         foreach(
             pairs(groupby(hists, :node, sort=true)),
             axs1,
         ) do ((node,), df), ax1
-            ax1.set_title("$node node")
-            ax1.step(df.bins, df.bg; label="background")
-            ax1.step(df.bins, df.bg + df.signal; label="total")
+            ax1.set_title("$node Node")
+            #ax1.step(df.bins, df.bg; label="background")
+            ax1.step(df.bins, df.signal; label="ttH Signal")
+            ax1.step(df.bins, df.bg + df.signal; label="Total")
             ax1.legend()
-            ax1.set_xlabel("p($node)")
+            ax1.set_xlabel("P($node)")
             ax1.set_yscale(:log)
-            ax1.set_ylim(minimum(filter(!=(0), df.bg)) * .8, maximum(df.bg + df.signal) * 2)
-            ax1.set_ylabel("Events")
+            #ax1.set_ylim(minimum(filter(!=(0), df.bg)) * .8, maximum(df.bg + df.signal) * 2)
+            ax1.set_ylim(.8, maximum(df.bg + df.signal) * 2)
+            ax1.set_ylabel("Events/Bin")
             annotate_cms(ax1)
         end
         tex && fig1.suptitle("Binning \\verb|$feature|")
@@ -114,7 +116,7 @@ ax.set_xticks(eachindex(x))
 ax.set_xticklabels(string.("\\verb|", x, "|"); rotation=90)
 ax.legend(; loc="upper right", fontsize=16, frameon=true)
 ax.set_ylabel(L"\sigma_\mu")
-fig.suptitle("Standard Deviations of \$\\mu\$ for training with LoLa + X")
+fig.suptitle("Standard Deviations of \$\\mu\$ for Training with LoLa + X")
 annotate_cms(ax)
 fig.tight_layout()
 fig.savefig(joinpath(basedir, "stddevs_mu_15bins.pdf"))
