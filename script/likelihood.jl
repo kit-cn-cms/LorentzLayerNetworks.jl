@@ -1,6 +1,7 @@
 using Arrow, DataFrames
 using Statistics, Distributions, StatsBase
-using Roots
+#using Roots
+using Optim, Roots
 using PyPlot, Printf, PyCall
 
 
@@ -38,17 +39,19 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
         hists = groupby(hists, [:bins, :node])
         hists = combine(hists) do x
             sig = x.true_class .=== :ttH
-            (signal=round(Int, sum(x[sig, :values])), bg=round(Int, sum(x[Not(sig), :values])))
+            #(signal=round(Int, sum(x[sig, :values])), bg=round(Int, sum(x[Not(sig), :values])))
+            (signal=sum(x[sig, :values]), bg=sum(x[Not(sig), :values]))
         end
         #filter!([:signal, :bg] => (s, b) -> s + b > 0, hists)
-        k = hists.signal .+ hists.bg
+        k = round.(Int, hists.signal .+ hists.bg)
         λ(μ) = μ .* hists.signal .+ hists.bg
         NLL(μ) = -sum(logpdf.(Poisson.(λ(μ)), k))
-        z1, z2 = find_zeros(μ -> 2(NLL(μ) - NLL(1)) - 1, 0, 2)
+        μ_exp = Optim.minimizer(optimize(NLL, 0., 2.))
+        z1, z2 = find_zeros(μ -> 2(NLL(μ) - NLL(μ_exp)) - 1, 0, 2)
         push!(measures, (; feature, kind, σ_μ = (z2 - z1) / 2, i))
 
         μ = range(.5, 1.5; length=100)
-        t = 2 .* (NLL.(μ) .- NLL(1))
+        t = 2 .* (NLL.(μ) .- NLL(μ_exp))
 
         fig, ax = subplots()
         ax.plot(μ, t)
@@ -58,8 +61,8 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
         tex && ax.set_title("\\verb|$feature|"; fontsize=16)
         ax.set_xlabel(L"\mu")
         ax.set_xlim(.5, 1.5)
-        tex && ax.set_ylabel(L"-2\log(\mathcal L(\mu) / \mathcal L(1))")
-        ax.legend(["\$\\mu = 1^{+$(@sprintf "%.3f" z2-1)}_{-$(@sprintf "%.3f" 1-z1)}\$"]; loc="upper center")
+        tex && ax.set_ylabel(L"-2\log(\mathcal L(\mu) / \mathcal L(\langle \mu \rangle))")
+        ax.legend([@sprintf("\$\\mu = %.3f^{+%.3f}_{-%.3f}\$", μ_exp, μ_exp-z1, z2-μ_exp)]; loc="upper center")
         annotate_cms(ax)
         display(fig)
         fig.savefig(joinpath(output_dir, "likelihood_ttH_$(kind)_15bins.pdf"))
@@ -77,7 +80,7 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
             ax1.set_xlabel("P($node)")
             ax1.set_yscale(:log)
             #ax1.set_ylim(minimum(filter(!=(0), df.bg)) * .8, maximum(df.bg + df.signal) * 2)
-            ax1.set_ylim(.8, maximum(df.bg + df.signal) * 2)
+            ax1.set_ylim(.05, maximum(df.bg + df.signal) * 2)
             ax1.set_ylabel("Events/Bin")
             annotate_cms(ax1)
         end
