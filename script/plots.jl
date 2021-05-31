@@ -57,10 +57,10 @@ for i in 1:10, feature in filter(x -> endswith(x, "_$i") && isdir(joinpath(based
             txt.set_path_effects([path_effects.withStroke(linewidth=1, foreground=:black)])
             #txt.set_path_effects([path_effects.withSimplePatchShadow(.8 .* (1, -1), :w, .8)])
         end
-        ax.set_xlabel("Predicted Output")
+        ax.set_xlabel("Predicted Class")
         ax.set_xticks(eachindex(classes).-1)
         ax.set_xticklabels(classes)
-        ax.set_ylabel("True Output")
+        ax.set_ylabel("True Class")
         ax.set_yticks(eachindex(classes).-1)
         ax.set_yticklabels(classes)
         txt = annotate_cms(ax; color=:w)

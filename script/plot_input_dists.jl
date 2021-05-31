@@ -20,6 +20,7 @@ for (ax, feature) in zip(permutedims([axs1; axs2]), Vars.scalar_features)
     unit = any(occursin(feature), ["Evt_M", "Evt_Pt", "toplep_m"]) ? " in GeV" : ""
     ax.set_xlabel("\\verb|$feature|$unit")
     ax.set_ylabel("Events/Bin")
+    ax.set_yscale(:log)
 
     leg = ax.legend()
     if feature in Vars.scalar_features[[end-3; end-1:end]]
@@ -60,6 +61,7 @@ for (ax, feature, unit) in zip(axs, [r"_Pt\[", r"_Eta\[", r"_Phi\[", r"_M\["],
         bins=30, stacked=true, label=first.(keys(_df)))
     ax.set_xlabel("\\verb|$(feature.pattern[2:end-2])|$unit")
     ax.set_ylabel("Events/Bin")
+    ax.set_yscale(:log)
 
     ax.legend()
     annotate_cms(ax; sel_pos=(.05, .95))
@@ -73,8 +75,8 @@ for i in 0:6
 fig, axs = subplots(4, 2, figsize=(18, 30))
 axs[2, 2].axis(:off)
 for (ax, feature, (lo, hi), unit) in zip([axs[1:2, :][1:3]; axs[3:4, :][:]], Vars.names_lola_out[7i+1:end],
-                                [(0, 10000); (0, 1000); (-200, 1200); fill((-5e5, 5e5), 4)],
-                                ["GeV\$^2\$"; "GeV"; "GeV"; fill("GeV", 4)])
+                                [(0, 10000); (0, 1000); (-200, 1200); fill((-5e5, 5e5), 2); fill((-5e5, 0), 2)],
+                                ["GeV\$^2\$"; "GeV"; "GeV"; fill("GeV\$^2\$", 4)])
     ax.hist([i[!, feature] for i in df],
         weights=[i.weights for i in df],
         bins=range(lo, hi; length=31), stacked=true, label=first.(keys(df)))
@@ -82,6 +84,7 @@ for (ax, feature, (lo, hi), unit) in zip([axs[1:2, :][1:3]; axs[3:4, :][:]], Var
     feature = replace(feature, r"Lepton_(.*)" => s"\\verb|\1| of the Lepton")
     ax.set_xlabel("$feature in $unit")
     ax.set_ylabel("Events/Bin")
+    ax.set_yscale(:log)
 
     ax.legend()
     annotate_cms(ax; sel_pos=(.05, .95))
